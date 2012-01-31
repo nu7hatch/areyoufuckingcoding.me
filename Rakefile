@@ -101,7 +101,6 @@ end
 def revert!
   %x[git checkout master]
   %x[git branch -D deployment]
-  %x[echo output >> .gitignore]
 end
 
 # Deploys the application via git to Heroku
