@@ -1,0 +1,18 @@
+--- 
+title: Welcome Stranger!
+---
+
+<h2>Recent blog posts...</h2>
+
+<% sorted_articles.each do |post| %>
+  <article class="blogpost_entry" id="<%= post.blogpost_id %>">
+    <time datetime="<%= post[:created_at].to_localtime.iso8601 %>">
+      <%= post[:created_at].to_localtime.format_as_date %>
+    </time>
+    <h3>
+      <a href="<%= post.path %>">
+        <%=h post[:title] %>
+      </a>
+    </h3>
+  </article>
+<% end %>
