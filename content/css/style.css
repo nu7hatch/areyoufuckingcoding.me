@@ -433,6 +433,9 @@ pre .il { color: #666666 } /* Literal.Number.Integer.Long */
    .tagline {
       top: 185px;
    }
+   [role="contentinfo"] {
+      text-align: center;
+   }
 }
 
 @media only screen and (max-width: 730px) {
