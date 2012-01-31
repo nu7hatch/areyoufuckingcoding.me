@@ -84,7 +84,8 @@ Thus this is going to be a Go related weblog, let it be in Go then:
         fmt.Println("Hello Go World!")
     }
 
-You can run this code, play with your own stuff and share it onlinw using [Go playground](http://play.golang.org). 
+You can run this code, play with your own stuff and share it online using 
+[Go playground](http://play.golang.org). 
 
 **Important!** At the moment Go playground allows to run code compliant with r60 release 
 version. Because of that a lot of my future examples may be broken while I'm using 
