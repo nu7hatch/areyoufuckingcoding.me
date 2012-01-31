@@ -225,18 +225,38 @@ pre, code {
    border-bottom: 2px solid #000;
    padding: 0;
    margin: 0 0 2em 0;
+   background: url(/img/face.png) bottom left no-repeat;
+   background-size: 150px 150px;
+   height: 150px;
 }
-[role="banner"] .tagline {
+.tagline {
    font-size: 120%;
    font-family: "Passion One", "Arial Black";
-   color: lightgray;
-   margin: -10px 0 0 0;
-   padding: 0 0 0 140px;
    -webkit-transform: rotate(5deg);	
    -moz-transform: rotate(5deg);
    -ms-transform: rotate(5deg);
    -o-transform: rotate(5deg);
    transform: rotate(5deg);
+   margin-top: -70px;
+   position: absolute;
+   width: 100%;
+   text-align: center;
+   top: 180px;
+   left: 0;
+}
+.tagline .in {
+   width: 860px;
+   margin: 0 auto;
+   text-align: right;
+}
+.tagline a {
+   color: white;
+   background: green;
+   padding: 5px 10px;
+   margin-right: 15px;
+   display: inline-block;
+   color: #FFF !important;
+   border: 2px solid #FFF;
 }
 #logo {
    font-family: "Passion One", "Arial Black";
@@ -245,8 +265,6 @@ pre, code {
    text-decoration: none;
    color: green;
    font-size: 160%;
-   background: url(/img/face.png) top left no-repeat;
-   background-size: 150px 150px;
    display: inline-block;
    padding-left: 140px;
    padding-top: 85px;
@@ -409,26 +427,58 @@ pre .il { color: #666666 } /* Literal.Number.Integer.Long */
       padding-left: 3%;
       padding-right: 3%;
    }
+   .tagline .in {
+      width: 100%;
+   }
+   .tagline {
+      top: 185px;
+   }
 }
 
-@media only screen and (max-width: 720px) {
+@media only screen and (max-width: 730px) {
    #logo {
-      background-size: 100px;
       line-height: 100%;
-      font-size: 120%;
-      padding-top: 10px;
+      font-size: 140%;
       padding-left: 110px;
+      padding-top: 50px;
    }
-   [role="banner"] .tagline {
-      padding-left: 110px;
-      margin-bottom: 10px;
-      margin-top: -15px;
+   [role="banner"] {
+      height: 100px;
+      background-size: 100px 100px;
+   }
+   .tagline {
+      top: 140px;
+   }
+}
+
+@media only screen and (max-width: 640px) {
+   #logo {
+      font-size: 120%;
+   }
+   .tagline {
+      top: 145px;
+   }
+
+}
+
+@media only screen and (max-width: 560px) {
+   #logo {
+      font-size: 110%;
+   }
+}
+
+@media only screen and (max-width: 510px) {
+   #logo {
+      padding-top: 15px;
    }
 }
 
 @media only screen and (max-width: 460px) {
    .blogpost_entry .created_at {
       display: none;
+   }
+   .tagline {
+      top: 150px;
    }
 }
 
