@@ -4,15 +4,22 @@ title: Welcome Stranger!
 
 <h2>Recent blog posts...</h2>
 
-<% sorted_articles.each do |post| %>
-  <article class="blogpost_entry" id="<%= post.blogpost_id %>">
-    <time datetime="<%= post[:created_at].to_localtime.iso8601 %>">
-      <%= post[:created_at].to_localtime.format_as_date %>
-    </time>
+<ul id="recent_posts">
+  <% len = sorted_articles.size %>
+  <% sorted_articles.each_with_index do |post, i| %>
+  <li class="blogpost_entry" id="<%= post.blogpost_id %>">
+    <span class="serialn">
+      0x<%= "%02X" % (len - i) %>
+    </span>
     <h3>
       <a href="<%= post.path %>">
         <%=h post[:title] %>
       </a>
     </h3>
-  </article>
-<% end %>
+    <time class="created_at" datetime="<%= post[:created_at].to_localtime.iso8601 %>">
+      <%= post[:created_at].to_localtime.format_as_date %>
+    </time>
+    <div class="clearfix"></div>
+  </li>
+  <% end %>
+</ul>

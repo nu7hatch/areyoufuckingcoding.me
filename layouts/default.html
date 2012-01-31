@@ -3,21 +3,41 @@
   <head>
     <meta charset="utf-8">
     <title>Are You Fuckign Coding Me!? - <%= @item[:title] %></title>
-    <link rel="stylesheet" type="text/css" href="/style.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="/css/style.css" media="screen">
+    <meta name="description" content="Distributed computing baby! Go-lang, Ruby, Linux and more!">
+    <meta name="author" content="Krzysztof Kowalik aka. nu7hatch">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="nanoc 3.2.4">
+    <script src="js/libs/modernizr-2.0.6.min.js"></script>
   </head>
   <body>
-    <header role="banner">
-      <h1>
-        <a href="/">Are You Fucking Coding Me!?</a>
-      </h1>
-    </header>
-    <section role="main">
-      <%= yield %>
-    </section>
-    <footer role="contentinfo">
-      Copyleft 2012 by <a href="http://www.nu7hat.ch/">nu7</a><br />
-      <small>Some rights reserved.</small>
-    </footer>
+    <div id="container">
+      <header role="banner">
+        <h1>
+          <a href="/" id="logo">Are You Fucking Coding Me!?</a>
+        </h1>
+        <p class="tagline">by nu7</p>
+      </header>
+      <div id="main" role="main">
+        <%= yield %>
+      </div>
+      <footer role="contentinfo">
+        Copyleft 2012 by <a href="http://www.nu7hat.ch/">nu7</a>, Some rights reserved. <br />
+        <small>
+          Follow me on <a href="http://twitter.com/nu7hatch">twitter</a> or see my projects
+          on <a href="http://github.com/nu7hatch">github</a>.
+      </footer>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/js/libs/jquery-1.7.1.min.js"><\/script>')</script>
+    <script src='/js/plugins.js'></script>
+    <script>
+        //Google Analytics
+        var _gaq=[['_setAccount','<%= $GOOGLE_ANALYTICS_UID %>'],['_trackPageview']];
+        (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+        g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+        s.parentNode.insertBefore(g,s)}(document,'script'));
+    </script>
   </body>
 </html>

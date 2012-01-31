@@ -7,6 +7,8 @@ include Nanoc3::Helpers::Rendering
 include Nanoc3::Helpers::Blogging
 include Nanoc3::Helpers::HTMLEscape
 
+# Custom extensions...
+
 module DateFormatters
   def format_as_date
     %[#{Date::MONTHNAMES[self.mon]} #{self.mday.to_i}, #{self.year}]
@@ -48,3 +50,7 @@ end
 class Nanoc3::Item
   include ItemExt
 end
+
+# Extra configuration...
+
+$GOOGLE_ANALYTICS_UID = "UA-28812082-1"
