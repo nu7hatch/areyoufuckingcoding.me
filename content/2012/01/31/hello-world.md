@@ -35,7 +35,7 @@ exactly the same when for example someone writes in Ruby:
     end
     
 The [**K.I.S.S. principle**](http://www.faqs.org/docs/artu/ch01s07.html) is the 
-thing! If you're programming skills are inspired by Hogwarth then <strike>spierdalaj</strike>
+thing! If your programming skills are inspired by Hogwarth then <strike>spierdalaj</strike>
 go somewhere else, because you'll find nothing interesting here. No metaprogramming, 
 no magic tricks, no sophisticated solutions! I will Keep It Simple, Stupid!
 

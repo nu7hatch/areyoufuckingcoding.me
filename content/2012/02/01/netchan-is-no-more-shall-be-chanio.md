@@ -123,10 +123,10 @@ its limitations, it fits the best to our problem:
     en.Encode(1)
     en.Encode("hello")
 
-    //...
+    // ...
 
     f.Seek(0, os.SEEK_SET)
-    de := gob.Decoder(f)
+    de := gob.NewDecoder(f)
     var i int
     var s string
     _ = en.Decode(i) // => 1
@@ -163,7 +163,7 @@ one just by reference:
     #!go
     var wch chan<- interface{}
     var rch <-chan interface{}
-    ch := make(chan interface{}
+    ch := make(chan interface{})
     wch, rch := ch, ch
 
 We can use that ability to create a channel internally and read from it under
