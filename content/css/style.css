@@ -229,6 +229,16 @@ pre, code {
    background-size: 150px 150px;
    height: 150px;
 }
+.atom {
+   left: 0;
+   text-align: right;
+   display: inline-block;
+   font-size: 40%;
+   float: right;
+   padding-top: 20px;
+   text-transform: none;
+   font-family: "Marga", Arial, sans-serif;
+}
 .tagline {
    font-size: 120%;
    font-family: "Passion One", "Arial Black";
@@ -428,6 +438,9 @@ pre .il { color: #666666 } /* Literal.Number.Integer.Long */
       padding-right: 3%;
    }
    .tagline .in {
+      width: 100%;
+   }
+   .atom .in {
       width: 100%;
    }
    .tagline {

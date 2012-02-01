@@ -1,0 +1,10 @@
+---
+is_hidden:   true
+title:       Are You Fucking Coding Me!?
+feed_url:    http://feeds.feedburner.com/areyoufuckingcodingme
+author_name: Krzysztof Kowalik
+author_uri:  http://areyoufuckingcoding.me
+is_dynamic:  true
+---
+
+<%= atom_feed %>

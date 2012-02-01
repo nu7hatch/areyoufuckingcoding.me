@@ -12,7 +12,7 @@ output_dir: output
 # server when a directory is requested. Usually, index files are named
 # “index.html”, but depending on the web server, this may be something else,
 # such as “default.htm”. This list is used by nanoc to generate pretty URLs.
-index_filenames: [ 'index.html', 'index.md', 'index.erb' ]
+index_filenames: [ 'index.html', 'index.md', 'index.erb', 'index.xml' ]
 
 # Whether or not to generate a diff of the compiled content when compiling a
 # site. The diff will contain the differences between the compiled content
@@ -57,3 +57,5 @@ watcher:
   # When to send notifications (using Growl or notify-send).
   notify_on_compilation_success: true
   notify_on_compilation_failure: true
+
+base_url: http://areyoufuckingcoding.me

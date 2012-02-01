@@ -22,6 +22,10 @@ compile '/js/*/' do
   filter(:coffee) if item[:extension] == 'coffee'
 end
 
+compile "/atom/" do
+  filter :erb
+end
+
 compile '*' do
   if item.binary?
     # don’t filter binary items
@@ -34,6 +38,10 @@ compile '*' do
     filter :colorize_syntax, :default_colorizer => :pygmentize
     layout 'default'
   end
+end
+
+route "/atom/" do
+  item.identifier.chop + '/index.xml'
 end
 
 route '/img/*/' do
