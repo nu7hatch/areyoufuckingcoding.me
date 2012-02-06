@@ -143,11 +143,11 @@ some custom structure, first you need to **register it**:
 
     #!go
     type Cat struct {
-        Cuteness int 
+            Cuteness int 
     }
     
     func init() {
-        gob.Register(&Cat{})
+            gob.Register(&Cat{})
     }
 
 Chuck Testa already explained you that it's not possible to pass a type as a
