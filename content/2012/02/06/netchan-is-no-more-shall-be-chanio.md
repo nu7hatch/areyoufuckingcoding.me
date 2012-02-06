@@ -216,9 +216,9 @@ implementation may look like:
             enc := gob.NewEncoder(w)
             for x := range ch {
                     if err := enc.Encode(&packet{x}); err == io.EOF {
-                        break
+                            break
 			        } else if err != nil {
-                        continue
+                            continue
                     }
             }
             // ...
