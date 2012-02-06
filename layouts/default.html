@@ -21,9 +21,19 @@
         </div>
       </header>
       <div id="main" role="main">
-        <%= yield %>
-
         <% if item[:kind] == "article" %>
+          <article class="fullpost" id="<%= item.blogpost_id %>">
+            <header>
+              <h2><%= item[:title] %></h2>
+              <div class="info">
+                posted by <span class="fn"><%= item[:author] %></span> /
+                <time class="created_at" datetime="<%= item[:created_at].to_localtime.iso8601 %>">
+                  <%= item[:created_at].to_localtime.format_as_date %>
+                </time><time >
+              </div>
+            </header>
+            <%= yield %>
+          </article>
           <div id="disqus_thread"></div>
           <script type="text/javascript">
               var disqus_shortname = 'areyoufuckingcodingme';
@@ -35,6 +45,8 @@
           </script>
           <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
           <a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a>
+        <% else %>
+          <%= yield %>
         <% end %>
       </div>
       <footer role="contentinfo">

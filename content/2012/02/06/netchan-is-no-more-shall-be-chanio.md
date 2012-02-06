@@ -1,14 +1,12 @@
 ---
 title:      NetChan is no more, shall be ChanIO?
 kind:       article
-created_at: february 1, 2012
+created_at: February 6, 2012
 author:     nu7
 ---
 
-## NetChan is no more, shall be ChanIO?
-
 Aaah, I just came back from a short backpacking trip to Argentina, refreshed 
-and full of energy! Yeap, it's a great time to write some cool blog post...
+and full of energy! Yeap, it's a great time to write my first real blog post...
 
 ### No for such a newbies...
 
@@ -255,12 +253,30 @@ internal chan into chanio on the fly it would be awesome! Right!? Right?...
 
 Actually... **no**! The [**K.I.S.S. principle**](http://www.faqs.org/docs/artu/ch01s07.html),
 you remember that? Besides keeping it simple, we have to be [**lean**](http://en.wikipedia.org/wiki/Lean_software_development),
-and think about possible _clients_ and their use cases (_Eliminate waste_). If 
-you start thinking about real life use cases you'll figure it out quickly that 
+and think about possible _clients/users_ and their use cases (_Eliminate waste_). 
+If you start thinking about real life use cases you'll figure it out quickly that 
 all of them can be solved easier, more efficient and reliable with some dedicated 
-solution. There's humongous number of possible configurations, verbosity or
-consistency levels etc. For example, to share important financial data requiring
-maximal consistency I would choose something like [Majordomo](http://rfc.zeromq.org/spec:7). 
+solutions. There's humongous number of possible configurations, consistency and verbosity
+levels, efficiency requirements etc. For example, to share important financial data 
+requiring maximal consistency I would choose something like [Majordomo](http://rfc.zeromq.org/spec:7). 
 From the other hand, real time weather notifications can be fault tolerant so we 
 can skip whole heartbeat mechanism and just don't give a shit when messages are 
 lost. **Using right tool to solve concrete problem**, that's the thing...
+
+### Summary
+
+Ok, that's all folks in this first real post in here. Here's what you should remember
+from this lesson:
+
+* Always check if type assertion was correct if you're not sure about the type of
+  the interface's value.
+* You can expose bi-directional channels easily to read/write-only ones just by
+  assignment.
+* The gob package is a great tool to serialize and exchange Go values between
+  instances - of course remember about registering custom structures.
+* Eliminate waste - first rule of _Lean Software Development_, first validate if
+  there's real need for your feature.
+* And obviously... Keep It Simple, Stupid!
+
+Hope you enjoyed this article, comments are just down here, **don't be shy**! I'm 
+very curious about your feedback :).

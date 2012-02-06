@@ -363,6 +363,14 @@ h3 {
    border: 2px solid #FFF;
 }
 
+article.fullpost .info {
+   font-size: 80%;
+   color: #BBB;
+}
+article.fullpost .fn {
+   font-weight: bold;
+}
+
 /* ==|== pygments ===========================================================
    Syntax highlighting styles
    ========================================================================== */

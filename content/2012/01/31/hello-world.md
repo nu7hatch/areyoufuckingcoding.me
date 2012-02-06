@@ -5,8 +5,6 @@ created_at: January 31, 2012
 author:     nu7
 ---
 
-## Hello World!
-
 I do programming stuff over 10 years, in my life I had many personal websites,
 portfolios and weblogs... Yeah i had weblogs! The problem is that all 
 of them get rusted just after writing a *"Hello World"* post.
