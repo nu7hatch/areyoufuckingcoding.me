@@ -191,7 +191,7 @@ channel as directional one just by assignment:
     ch := make(chan string) // bi-directional channel
     wch, rch := ch, ch
     wch <- "hello"
-    fmt.Printf(<-rch)       // => "hello"
+    fmt.Println(<-rch)      // => "hello"
 
 As you can see, we can assign the bi-directional channel to both directional ones,
 which allows us to use write-only channel to publish data, and read-only channel 
