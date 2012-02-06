@@ -20,7 +20,7 @@ to share with the people.
 
 Why _**Are you fucking coding me**_? Huh, because I'm considered to be an asshole
 and stubborn perfectionist. I was always looking for the best solution of the 
-problems, the fastest algorighms, the best practices etc. Besides my face looks
+problems, the fastest algorithms, the best practices etc. Besides my face looks
 exactly the same when for example someone writes in Ruby:
 
     #!ruby
