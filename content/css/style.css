@@ -354,13 +354,21 @@ h3 {
 .blogpost_entry:hover a {
    color: black;
 }
+.meme {
+   background: #000;
+   padding: 1.5em 0;
+   text-align: center;
+}
+.meme img {
+   border: 2px solid #FFF;
+}
 
 /* ==|== pygments ===========================================================
    Syntax highlighting styles
    ========================================================================== */
 
 pre .hll { background-color: #ffffcc; }
-pre  { background: #f8f8f8; padding: 5px 10px; }
+pre  { background: #f8f8f8; padding: 5px 10px; border-left: 5px solid #DDD; }
 pre .c { color: #008800; font-style: italic } /* Comment */
 pre .err { border: 1px solid #FF0000 } /* Error */
 pre .k { color: #AA22FF; font-weight: bold } /* Keyword */
