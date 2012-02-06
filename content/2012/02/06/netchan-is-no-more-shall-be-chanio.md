@@ -8,7 +8,7 @@ author:     nu7
 Aaah, I just came back from a short backpacking trip to Argentina, refreshed 
 and full of energy! Yeap, it's a great time to write my first real blog post...
 
-### No for such a newbies...
+### Not for newbies...
 
 I have to clarify something first. You have to be aware that it's not gonna
 be a blog for total newbies. You have to know at least basics of Go and you can 
@@ -19,16 +19,16 @@ If you haven't seen it yet, **go there** and **come back when you finish**!
 
 ### What's up with NetChan?
 
-Current stable release of Go (r60) still have netchan in standard packages, but 
-it has already been changed in weekly and netchan will be not included to Go 1. 
-What do we have in exchange then? Nothing!
+Current stable release of Go (r60) still has netchan in the standard packages, but
+it has already been changed in the weekly release and netchan will be not included to Go 1.
+What can we do instead then? Nothing!
 
-There's no official package which provides network wrappers for the channels, 
+There's no official package which provides network wrappers for the channels,
 but [this TLTR thread](http://groups.google.com/group/golang-nuts/browse_thread/thread/12bdd37ad9ed4a68?pli=1) 
-on [Go nuts mailing list](http://groups.google.com/group/golang-nuts/) brought 
-few nice ideas. The one I liked the most is a wrapper which allows to bind the 
-channel with any kind of [`io.Reader`](http://weekly.golang.org/pkg/io/#Reader) 
-or [`io.Writer`](http://weekly.golang.org/pkg/io/#Writer). It sounds like a fun 
+on [Go nuts mailing list](http://groups.google.com/group/golang-nuts/) brought up a
+few nice ideas. The one I liked the most is a wrapper which allows to bind the
+channel with any kind of [`io.Reader`](http://weekly.golang.org/pkg/io/#Reader)
+or [`io.Writer`](http://weekly.golang.org/pkg/io/#Writer). It sounds like a fun
 thing to do and great exercise to learn something, let's implement it then!
 
 ### Specification
@@ -77,14 +77,14 @@ Take a look:
     ch <- "hello" // ok
     ch <- 1       // ok too!
 
-Kwak kwak! For the power of duck typing! So now things get simpler, we just
-need to write a wrapper for the `chan interface{}`. Looks cool, but has one 
+Quack quack! By the power of duck typing! So now things get simpler, we just
+need to write a wrapper for the `chan interface{}`. Looks cool, but it has one 
 small disadvantage... it's not idiot-proof:
 
     #!go
     x := <-ch
     fmt.Println(x.(string))
-    
+
 The code above will compile, because it uses type assertion to get a string
 value from the interface. But what do you think is going to happen when the
 channel will receive a value of any other type, different than string... 
@@ -117,9 +117,9 @@ we have to consider them to be compliant with the third one. So we need to
 be able to write (serialize) any kind of the data into IO stream. 
 
 Go provides an awesome solution of this problem in its standard library.
-There's a pacage called [`encoding/gob`](http://weekly.golang.org/pkg/encoding/gob/), 
+There's a package called [`encoding/gob`](http://weekly.golang.org/pkg/encoding/gob/), 
 which implements **exchanging of binary encoded Go values** between transmiter
-(`io.Writer`) and receiver (`io.Reader`). This is it! Here's a trivial example
+(`io.Writer`) and receiver (`io.Reader`). This is it! Here's a trivial example of
 how it works:
 
     #!go
@@ -151,7 +151,7 @@ some custom structure, first you need to **register it**:
     }
 
 Chuck Testa already explained you that it's not possible to pass a type as a
-parameter, so gob uses neat trick to register new type. It gets an **empty 
+parameter, so gob uses a neat trick to register new type. It gets an **empty 
 pointer to the struct** as a parameter. That allows it to identify the struct's
 fields, functions, etc, and later, quickly and efficiently serialize/deserialize
 values of that type.
@@ -165,14 +165,14 @@ Let's write some real, working code now. Binding a channel with specified
 `io.Writer` can be done in two ways:
 
 * get a channel as a parameter
-* create new channel, bind it with given writer and return it
+* create new channel, bind it with a given writer and return it
 
 First approach seems reasonable and may give a lot of flexibility to the users, 
 but if we will look at it closer it may also allow them to **fuck things up**. 
 For example, user can read data from the same channel he specified as a binding
 for the writer, which may cause **data corruption**.
 
-To keep this implementation simple and clean, let's assume that users shall not
+To keep this implementation simple and clean, let's assume that users wont
 allow be able to bind an IO with existing channel. We should also prevent users 
 from reading data from the returned channel. It can be done by returning the 
 directional (write-only) channel:
@@ -181,9 +181,9 @@ directional (write-only) channel:
     ch := make(chan<- interface{})
 
 Ups, we have a problem here... If we will create a write only channel, then we're 
-screwed, becase we can't read from it! But no worries, don't be panic, everything's
-gonna be alright! Go has a neat solution for that as well. We can use bi-directional
-channel as directional one just by assignment:
+screwed, becase we can't read from it! But no worries, don't panic, everything's
+gonna be alright! Go has a neat solution for that as well. We can use a bi-directional
+channel as a directional one just by assignment:
 
     #!go
     var wch chan<- string   // write-only channel
@@ -194,15 +194,15 @@ channel as directional one just by assignment:
     fmt.Println(<-rch)      // => "hello"
 
 As you can see, we can assign the bi-directional channel to both directional ones,
-which allows us to use write-only channel to publish data, and read-only channel 
-to consume it.     
+which allows us to use a write-only channel to publish data, and a read-only channel 
+to consume it.
 
 <div class="meme">
   <img src="/img/meme-marvelous-1.jpg" alt="MARVELOUS!" />
 </div>
 
 Now we can use that ability and create an internal channel for reading under
-the hood, exposing the write-only part to the user. That's how our writer
+the hood, exposing the write-only part to the user. This is how our writer
 implementation may look like:
 
     #!go
@@ -226,19 +226,19 @@ implementation may look like:
 
 Yeap, that's it. Trivial, isn't it? I don't know if I need to explain aything, 
 you should understand this code easily. From the same reason I'm not going to 
-describing reader's implementation here. You can find fully working, tested
+describe the reader's implementation here. You can find a fully working, tested
 and goinstallable package [here](http://github.com/nu7hatch/gochanio). Feel free
-to fork and play with it.
+to fork it and play with it.
 
 ### Be or not to be (in standard packages)
 
 Looking at the snippet above now, I have to admit that @kevlar_work was absolutelly
-right during our IRC conversation - **it's extremally easy to exchange data via 
-channels over the network**. Thus now I'm sure there's no need to have such generic
-solution in standard library. 
+right during our IRC conversation - **it's extremely easy to exchange data via 
+channels over the network**. So now I'm sure there's no need to have such a generic
+solution in the standard library. 
 
 But there's one more thing I can't stop thinking about. During our conversation
-about chanio on go-nuts mailing list, Kyle Lemons came across with a huge problem
+about chanio on go-nuts mailing list, Kyle Lemons came across the huge problem
 of sharing channels over the network. By sharing channels I mean sending channels
 via network channels and converting them into network channels...
 
@@ -246,9 +246,9 @@ via network channels and converting them into network channels...
   <img src="/img/meme-inception-1.jpg" />
 </div>
 
-Yeah, sounds ridiculous, but idea is actually really nice. Imagine that you can
+Yeah, sounds ridiculous, but the idea is actually really nice. Imagine that you can
 share a structure containing internal channel over the network chan. If the
-network channel (or serializer) would be able to figure out how to convert that
+network channel (or serializer) were able to figure out how to convert that
 internal chan into chanio on the fly it would be awesome! Right!? Right?...
 
 Actually... **no**! The [**K.I.S.S. principle**](http://www.faqs.org/docs/artu/ch01s07.html),
@@ -256,16 +256,16 @@ you remember that? Besides keeping it simple, we have to be [**lean**](http://en
 and think about possible _clients/users_ and their use cases (_Eliminate waste_). 
 If you start thinking about real life use cases you'll figure it out quickly that 
 all of them can be solved easier, more efficient and reliable with some dedicated 
-solutions. There's humongous number of possible configurations, consistency and verbosity
-levels, efficiency requirements etc. For example, to share important financial data 
+solutions. There's a humongous number of possible configurations, consistency and verbosity
+levels, efficiency requirements, etc. For example, to share important financial data 
 requiring maximal consistency I would choose something like [Majordomo](http://rfc.zeromq.org/spec:7). 
-From the other hand, real time weather notifications can be fault tolerant so we 
-can skip whole heartbeat mechanism and just don't give a shit when messages are 
-lost. **Using right tool to solve concrete problem**, that's the thing...
+In the other hand, real time weather notifications can be fault tolerant so we 
+can skip the whole heartbeat mechanism and just don't give a shit when messages are 
+lost. **Using right tool to solve concrete problem**, that's the important thing...
 
 ### Summary
 
-Ok, that's all folks in this first real post in here. Here's what you should remember
+Ok, that's all folks in this first real post in this blog. Here's what you should remember
 from this lesson:
 
 * Always check if type assertion was correct if you're not sure about the type of
@@ -280,3 +280,5 @@ from this lesson:
 
 Hope you enjoyed this article, comments are just down here, **don't be shy**! I'm 
 very curious about your feedback :).
+
+Oh, and thanks to [PoTe](http://twitter.com/poteland) for the language nitpicks!
