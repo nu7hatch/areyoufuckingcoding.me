@@ -284,7 +284,7 @@ requires weird compiler flags or some configuration, etc...
 Yes, don't be afraid of using makefiles! It's the easiest and quite convenient
 way to deal with extra configuration, some prerequisites etc. Makefiles can
 be helpful not only in C extensions but in multi-package applications as well
-(eg. in [webrocket](http://github.com/webrocket/webrocket.git) we're using a top 
+(eg. in [webrocket](http://github.com/webrocket/webrocket) we're using a top 
 level  makefile to make our life easier). 
 
 More explicit example... Imagine an application which contains a core package and
