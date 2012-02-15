@@ -7,11 +7,11 @@ author:     nu7
 
 On the wave of the latest weekly release introducing **new go command** I decided to write
 a little about it. I have to admit that when I heard about the idea of unified **go** tool
-for the first time I was little bit sceptic and full of fears. I was worrying that it's gonna
+for the first time I was little bit skeptic and full of fears. I was worrying that it's gonna
 be fucked up like most of the other language-specific package managers. IMHO most of such 
 package managers are reinventing the wheel and coliding with the operating system PMs which
 makes sysadmins' life much harder. What's more, I actually really liked makefiles, they were
-simple and straightforward, and just worked fine. Fortunetelly, **new go tool dispelled 
+simple and straightforward, and just worked fine. Fortunetely, **new go tool dispelled 
 all my fears!**
 
 ### Don't repeat...
@@ -359,7 +359,7 @@ of the time I was saying to myself, _"woah, dude, wtf's going on with you, it's 
 should be"_.
 
 Now looking through my shoulder at all the tools I was using before, like `easy_install`, 
-`rubygems` or `bundler`, I have only one picture of them in my mind... Oh, i'll better
+`rubygems` or `bundler`, I have only one picture of them in my mind... Oh, I'll better
 not publish it because more people may hate me :). Instead, the new go tool is very close
 to...
 
@@ -367,4 +367,5 @@ to...
   <img src="/img/meme-superman-1.jpg" alt="..." />
 </div>
 
-I'm happy to see Go going in a good direction! That's all for today, take care Gophers!
+Anyway, I'm very happy to see Go going in a good direction! That's all for today, take
+care Gophers!
