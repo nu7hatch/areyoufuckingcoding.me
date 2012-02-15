@@ -350,22 +350,20 @@ build tool you like.
 
 ### Summary
 
-I have to say it clearly, I **fucking love new go tool**! I encountered bunch of problems
-while playing with it for the first time and while getting rid of makefiles from the 
-packages I maintain, but most of that problems was caused by some bad habbits gained 
-while using other package mangers and tools. Hah, recently I asked a lot of stupid question
-on the go-nuts IRC channel and answers I getwere ridiculously obvious and simple. Most 
-of the time I was saying to myself, _"woah, dude, wtf's going on with you, it's as it 
-should be"_.
+I have to say it clearly, **I fucking love new go tool**! I encountered bunch of problems
+while playing with it for the first time, but most of the issues was caused by some bad 
+habits I've gained while using other package mangers/tools. Hah, recently I asked a lot 
+of stupid question on the go-nuts IRC channel and the answers I get were ridiculously 
+obvious and simple...
 
 Now looking through my shoulder at all the tools I was using before, like `easy_install`, 
 `rubygems` or `bundler`, I have only one picture of them in my mind... Oh, I'll better
-not publish it because more people may hate me :). Instead, the new go tool is very close
-to...
+not publish it because more people may hate me :). Instead, I can show you how do I 
+see the new go tool...
 
 <div class="meme">
   <img src="/img/meme-superman-1.jpg" alt="..." />
 </div>
 
-Anyway, I'm very happy to see Go going in a good direction! That's all for today, take
-care Gophers!
+I'm very happy to see Go going in a good direction! That's all for today, take care 
+Gophers!
