@@ -66,7 +66,7 @@ go sources, packages and commands will be located**. Take a look:
     
 All the sources will be located in the `src` folder. By all the sources I mean both, 
 your applications, packages and dependencies as well. The `pkg` folder contains compiled 
-and installed packages, and `cmd` installed commands.
+and installed packages, and `bin` installed commands.
 
 The `GOPATH` variable works very similar to `PATH`, you can set as many go paths
 as you want. You have to only remember that first one is the main one, so all 
@@ -166,7 +166,7 @@ remote package you will use `go get` instead:
     
 To install local package obviously `go install` tool will be used. It builds the
 package first (if it's necessary) and then installs it under `$GOPATH/pkg` or/and
-`$GOPATH/cmd`.
+`$GOPATH/bin`.
 
 The go tool is also able to **ignore files during the build**, obvioulsy without
 extra flags and special configuration. The only thing you have to do to ignore a file,
