@@ -388,6 +388,9 @@ article.fullpost .info {
 article.fullpost .fn {
    font-weight: bold;
 }
+code {
+   background: #f8f8f8;
+}
 
 /* ==|== pygments ===========================================================
    Syntax highlighting styles
