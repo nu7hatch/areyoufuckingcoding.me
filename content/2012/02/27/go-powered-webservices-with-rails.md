@@ -249,4 +249,7 @@ is something totally wrong or bad, nor that you should use Rails to write all
 your web apps. What I want to say is that Go is a little bit different language than
 Ruby, and looking for ruby-like solutions in go is just pointless. Rails, Django or Sinatra
 work good for full stack web applications, while Go performs splendidly while 
-powering them up with web-services or tools.
+powering them up with web-services or tools. 
+
+That's all for tonight, like always thanks to [PoTe](http://twitter.com/poteland) 
+for fixing my terrible english!
