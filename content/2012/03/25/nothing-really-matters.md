@@ -476,12 +476,15 @@ it!
 
 At the end, I would like to also thank Cubox for how they helped me to
 change my mindset during last year. Thanks to [apotonick](http://twitter.com/apotonick)
-again! Big thanks to [Jim Gay](https://twitter.com/#!/saturnflyer) for his
+again! Big thanks to [Jim Gay](https://twitter.com/saturnflyer) for his
 great talk at wroc_love.rb about DCI - even if I don't agree with all the
 presented ideas it helped me a lot to clarify mine :P. Also, thanks
-to [Tim Lossen](https://twitter.com/#!/tlossen) for raising the glove
+to [Tim Lossen](https://twitter.com/tlossen) for raising the glove
 in the battle between monolythic apps versus web-services I go for,
 which caused me to dig deeper and deeper about this topic. I can't wait to see 
 your talk at EuRuKo! And of course thanks to [rabble](http://anarchogeek.com)
 for infecting me with Lean Startup stuff and making me understand it 
-in practice.
+in practice. 
+
+Like always thanks to [pote](http://twitter.com/poteland) for reviewing
+my ugly english.
