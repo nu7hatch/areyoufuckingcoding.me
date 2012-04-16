@@ -12,6 +12,7 @@ group :development do
   gem 'rdiscount'
   gem 'nokogiri'
   gem 'coderay'
+  gem 'cri'
   gem 'fssm'  
   gem 'builder'
   gem 'yui-compressor'
