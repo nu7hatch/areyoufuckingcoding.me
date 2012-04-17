@@ -11,4 +11,4 @@ tmp/
 *.pid
 *.dump
 .env
-output
+

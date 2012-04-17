@@ -1,0 +1,310 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Are You Fuckign Coding Me!? - Go-powered web-services with Rails</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css" media="screen">
+    <meta name="description" content="Distributed computing baby! Go-lang, Ruby, Linux and more!">
+    <meta name="author" content="Krzysztof Kowalik aka. nu7hatch">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="nanoc 3.2.4">
+    <script src="js/libs/modernizr-2.0.6.min.js"></script>
+  </head>
+  <body>
+    <div id="container">
+      <header role="banner">
+        <h1>
+          <a href="/" id="logo">Are You Fucking Coding Me!?</a>
+        </h1>                                                
+        <div class="tagline">
+          <div class="in"><a href="http://www.nu7hat.ch/">by nu7</a></div>
+        </div>
+      </header>
+      <div id="main" role="main">
+        
+          <article class="fullpost" id="2012_2_27_go_powered_web_services_with_rails">
+            <header>
+              <h2>Go-powered web-services with Rails</h2>
+              <div class="info">
+                posted by <span class="fn">nu7</span> /
+                <time class="created_at" datetime="2012-02-27T00:00:00+01:00">
+                  February 27, 2012
+                </time><time >
+              </div>
+            </header>
+            <p>Today's episode will be about <strong>using the right tools to solve a concrete problem</strong> and is
+influenced by all the questions about Rails-like frameworks in Go which recently shown
+up on the <em>golang-nuts</em> mailing list.</p>
+
+<p>Hater mode ON. I stubbornly believe that efforts to clone Rails in any other
+programming language (Go included) are just ridiculous. If you want to use Rails,
+<strong>learn Ruby motherfucker</strong>! The second thing which I strongly believe in, is to know
+the strengths and weaknesses of <strong>all the tools we're using</strong>, and choosing those which
+may solve the problem with <strong>minimal effort and maximal benefits</strong>. That's why, no
+matter how much I like Go, I wouldn't decide to write full-stack web application
+in it. Btw, to all the people looking Rails-like framework in Go...</p>
+
+<div class="meme">
+  <img src="/img/meme-obama-disappoint-1.jpg" alt="I'm disappoint">
+</div>
+
+
+<p>Hater mode OFF.</p>
+
+<h3 id="But,+but...+there+are+websites+in+Go!?">But, but... there are websites in Go!?</h3>
+
+<p>Yes, of course there are. The same as we have the D programming language forum written
+in D or a web applications framework for C++. You can do it, the main question of
+this article is, <strong>is it worth it</strong>? Let me explain you everything by example...</p>
+
+<p>Let's figure out some app we could do in Rails in a few hours. Oh, it would be
+fun to have some small web app where you can upload your picture, apply
+some filter and share it with your friends. Yeap gophers, I choose
+this in purpose, to compare with <a href="http://moustach-io.appspot.com/">mustachio</a>.
+Here's how the project specification could look like:</p>
+
+<ul>
+<li>As an anonymous user I want to go to the home page, select a picture from
+my hard drive, click the "Upload" button and then see it uploaded.</li>
+<li>When I am on the uploaded picture page, I want to see my original picture
+and buttons with available filters.</li>
+<li>When I am on the uploaded picture page and I click one of the filter
+buttons I want to see my picture with that filter applied.</li>
+<li>When I am on the uploaded picture page after I select which filters to apply
+and click the "Done" button, then I want to see a link which I can share with my
+friends.</li>
+</ul><p>Simple stuff to do, isn't it? We can build it very quickly using Rails,
+<a href="https://github.com/jnicklas/carrierwave">CarrierWave</a> and <a href="http://www.imagemagick.org/script/index.php">ImageMagick</a>,
+powered up with some NoSQL datastore if needed. But the truth is that we could write
+such an app in Go quite easily. It would be slightly more difficult, it could require a bigger
+code base and take a little longer, but in exchange produce a splendidly performant
+application... I mentioned <a href="http://moustach-io.appspot.com/">mustachio</a> as a good
+example of it, so why not to do this?</p>
+
+<h3 id="Expectations">Expectations</h3>
+
+<p>Let's take a look at the problem from the <strong>business side</strong>. We are building something
+new, we know how to do this, but we have no idea how many people is going to use
+it, how much resources we may need to maintain that app, etc. We want to try it out,
+write a minimum viable product, show it to the people and check how many of them
+are going to use it. That's why we're going to implement stuff with <strong>minimum effort</strong>,
+using technologies <strong>we know the best</strong>. Of course there may be a problem if the site
+goes down under the flood of enthusiastic users... but, isn't that a problem
+we want to have? When this happens, then we can extract the most loaded parts of
+our app into <strong>fast web-services written in Go</strong>.</p>
+
+<div class="meme">
+  <img src="/img/meme-i-dont-always-1.jpg" alt="I don't always write websites in Go">
+</div>
+
+
+<h3 id="Tweaking+up!">Tweaking up!</h3>
+
+<p>So let's imagine that our application encountered a huge amount of users. It's easy
+to figure out that the most loaded part of the app will be images processing and
+applying filters. What we can do in that case is to leave ImageMagick behind
+and use the <a href="http://weekly.golang.org/pkg/image"><strong>image</strong></a> package from the Go
+standard library instead. Everything nicely wrapped around with <strong>HTTP web services</strong>.</p>
+
+<p>First, we have to tell our Rails app where the images are going to come from.
+Rails 3.x allows us to specify the <code>asset_host</code> in the controller's configuration:</p>
+
+<pre><code class="language-ruby"><span class="no">ActionController</span><span class="o">::</span><span class="no">Base</span><span class="o">.</span><span class="n">asset_host</span> <span class="o">=</span> <span class="no">Proc</span><span class="o">.</span><span class="n">new</span> <span class="p">{</span> <span class="o">|</span><span class="n">source</span><span class="o">|</span>
+  <span class="k">if</span> <span class="n">source</span><span class="o">.</span><span class="n">starts_with?</span><span class="p">(</span><span class="s1">'/uploads'</span><span class="p">)</span>
+    <span class="s2">"http://filters.ournicepage.com"</span>
+  <span class="k">else</span>
+    <span class="s2">"http://ournicepage.com"</span>
+  <span class="k">end</span>
+<span class="p">}</span></code></pre>
+
+<p>As you can see, we can tell Rails to load only the images from a different location
+and keep using all other assets normally. You can find out more about it in <a href="http://api.rubyonrails.org/classes/ActionView/Helpers/AssetTagHelper.html">the
+AssetTagHelper documentation</a>.</p>
+
+<p>Now we need to have something to serve on <em>filters.ourpage.com</em>. This is not a post
+about image processing etc, if you're hungry for the full implementation, you can find
+it <a href="http://github.com/nu7hatch/golaroid">on my github</a>. Here I will show you just a few
+tricks I found useful while writing this stuff.</p>
+
+<h3 id="Custom+HTTP+handlers">Custom HTTP handlers</h3>
+
+<p>After going through the <a href="http://tour.golang.org/#1"><strong>Interactive Go Tour</strong></a> you probably
+know how to write a simple HTTP service. Here's how our image filtering may look like
+with the default <code>net/http</code> stuff:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="n">ImageHandler</span><span class="p">(</span><span class="n">w</span> <span class="n">http</span><span class="p">.</span><span class="n">ResponseWriter</span><span class="p">,</span> <span class="n">r</span> <span class="p">*</span><span class="n">http</span><span class="p">.</span><span class="n">Request</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">r</span><span class="p">.</span><span class="n">ParseForm</span><span class="p">()</span> <span class="c1">// we have to parse form before using its values</span>
+        <span class="n">path</span> <span class="p">=</span> <span class="n">filepath</span><span class="p">.</span><span class="n">Join</span><span class="p">(</span><span class="n">ImagesRoot</span><span class="p">,</span> <span class="n">r</span><span class="p">.</span><span class="n">FormValue</span><span class="p">(</span><span class="s">"image"</span><span class="p">))</span>
+        <span class="c1">// *snip*</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+        <span class="n">http</span><span class="p">.</span><span class="n">HandleFunc</span><span class="p">(</span><span class="s">"/filter"</span><span class="p">,</span> <span class="n">ImageHandler</span><span class="p">)</span>
+        <span class="n">log</span><span class="p">.</span><span class="n">Fatal</span><span class="p">(</span><span class="n">http</span><span class="p">.</span><span class="n">ListenAndServe</span><span class="p">(</span><span class="n">Addr</span><span class="p">,</span> <span class="n">nil</span><span class="p">))</span>
+<span class="p">}</span></code></pre>
+
+<p>Works, but sucks - because it gets information from GET parameters. To get a processed image
+we have to request something like this: <code>/filter?image=image/path&amp;filter=sepia</code>. If our
+Rails application provides nice URLs, like <code>/image/path?filter=sepia</code>, then we have
+to figure our something better. One option we can use instead is <a href="https://github.com/bmizerany/pat.go"><strong>pat.go</strong></a> -
+a Sinatra style pattern multiplexer from Blake Mizerany. Our improved implementation
+may look like this:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="n">ImageHandler</span><span class="p">(</span><span class="n">w</span> <span class="n">http</span><span class="p">.</span><span class="n">ResponseWriter</span><span class="p">,</span> <span class="n">r</span> <span class="p">*</span><span class="n">http</span><span class="p">.</span><span class="n">Request</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">r</span><span class="p">.</span><span class="n">ParseForm</span><span class="p">()</span>
+        <span class="n">path</span> <span class="p">=</span> <span class="n">filepath</span><span class="p">.</span><span class="n">Join</span><span class="p">(</span><span class="n">ImagesRoot</span><span class="p">,</span> <span class="n">r</span><span class="p">.</span><span class="n">FormValue</span><span class="p">(</span><span class="s">":splat"</span><span class="p">))</span>
+        <span class="c1">// *snip*</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+        <span class="n">mux</span> <span class="p">:=</span> <span class="n">pat</span><span class="p">.</span><span class="n">New</span><span class="p">()</span>
+        <span class="n">mux</span><span class="p">.</span><span class="n">Get</span><span class="p">(</span><span class="s">"/*"</span><span class="p">,</span> <span class="n">ImageHandler</span><span class="p">)</span>
+        <span class="n">log</span><span class="p">.</span><span class="n">Fatal</span><span class="p">(</span><span class="n">http</span><span class="p">.</span><span class="n">ListenAndServe</span><span class="p">(</span><span class="n">Addr</span><span class="p">,</span> <span class="n">mux</span><span class="p">))</span>
+<span class="p">}</span></code></pre>
+
+<p>This looks much better, we can apply a filter to the image by requesting <code>/image/path?filter=sepia</code>.
+But to be honest, do we really need any external mux to serve just one thing? This
+web-service does only one thing right, so we can just use a full request path to distinguish an
+image. To achieve that we have to define our <a href="http://weekly.golang.org/pkg/net/http/#Handler">custom <code>http.Handler</code></a>.
+Handler is an interface which requires a <code>ServeHTTP</code> function to be implemented. Let's implement
+it then:</p>
+
+<pre><code class="language-go"><span class="k">type</span> <span class="n">ImageHandler</span> <span class="k">struct</span> <span class="p">{}</span>
+
+<span class="k">func</span> <span class="p">(</span><span class="n">h</span> <span class="p">*</span><span class="n">ImageHandler</span><span class="p">)</span> <span class="n">ServeHTTP</span><span class="p">(</span><span class="n">w</span> <span class="n">http</span><span class="p">.</span><span class="n">ResponseWriter</span><span class="p">,</span> <span class="n">r</span> <span class="p">*</span><span class="n">http</span><span class="p">.</span><span class="n">Request</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">path</span> <span class="p">:=</span> <span class="n">filepath</span><span class="p">.</span><span class="n">Join</span><span class="p">(</span><span class="n">ImagesRoot</span><span class="p">,</span> <span class="n">r</span><span class="p">.</span><span class="n">URL</span><span class="p">.</span><span class="n">Path</span><span class="p">)</span>
+        <span class="c1">// *snip*</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+        <span class="n">srv</span> <span class="p">:=</span> <span class="p">&amp;</span><span class="n">http</span><span class="p">.</span><span class="n">Server</span><span class="p">{</span>
+                <span class="n">Addr</span><span class="p">:</span>    <span class="n">Addr</span><span class="p">,</span>
+                <span class="n">Handler</span><span class="p">:</span> <span class="p">&amp;</span><span class="n">ImageHandler</span><span class="p">{},</span>
+        <span class="p">}</span>
+        <span class="n">log</span><span class="p">.</span><span class="n">Fatal</span><span class="p">(</span><span class="n">srv</span><span class="p">.</span><span class="n">ListenAndServe</span><span class="p">())</span>
+<span class="p">}</span></code></pre>
+
+<h3 id="Distinguishing+file+errors">Distinguishing file errors</h3>
+
+<p>If you take a look at the full <a href="https://github.com/nu7hatch/golaroid/blob/master/handler.go#L21"><code>ServeHTTP</code> implementation</a>.
+you will notice that I'm checking out what kind of error has been returned from
+<code>pic.Load()</code> to produce either a <code>404</code> or <code>500</code> error page. The <a href="http://weekly.golang.org/pkg/os/"><strong>os</strong> package</a>
+has a few helpers to do this, i.a to check if the returned error was caused by a missing
+file, we can use the <a href="http://weekly.golang.org/pkg/os/#IsNotExist"><code>IfNotExist</code> helper</a>:</p>
+
+<pre><code class="language-go"><span class="k">if</span> <span class="n">err</span> <span class="p">:=</span> <span class="n">pic</span><span class="p">.</span><span class="n">Load</span><span class="p">();</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="n">os</span><span class="p">.</span><span class="n">IsNotExist</span><span class="p">(</span><span class="n">err</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">http</span><span class="p">.</span><span class="n">NotFound</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="n">w</span><span class="p">.</span><span class="n">WriteHeader</span><span class="p">(</span><span class="n">http</span><span class="p">.</span><span class="n">StatusInternalServerError</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="k">return</span>
+<span class="p">}</span></code></pre>
+
+<h3 id="Custom+iterators">Custom iterators</h3>
+
+<p>To apply custom filters to the picture in most cases we have to iterate over
+all the pixels. When our iteration contains some duplications, we can DRY it out
+using a <strong>custom iterator</strong>, like this one for example:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="n">EachPixel</span><span class="p">(</span><span class="n">img</span> <span class="n">image</span><span class="p">.</span><span class="n">Image</span><span class="p">,</span> <span class="n">fn</span> <span class="k">func</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="nb">int</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">a</span> <span class="nb">uint8</span><span class="p">))</span> <span class="p">{</span>
+        <span class="n">rect</span> <span class="p">:=</span> <span class="n">img</span><span class="p">.</span><span class="n">Bounds</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="p">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="p">&lt;</span> <span class="n">rect</span><span class="p">.</span><span class="n">Dx</span><span class="p">()</span> <span class="p">*</span> <span class="n">rect</span><span class="p">.</span><span class="n">Dy</span><span class="p">();</span> <span class="n">i</span><span class="p">++</span> <span class="p">{</span>
+                <span class="c1">// Bunch of calculations you shouldn't care about...</span>
+                <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="p">:=</span> <span class="n">i</span> <span class="p">%</span> <span class="n">rect</span><span class="p">.</span><span class="n">Dx</span><span class="p">()</span> <span class="p">+</span> <span class="n">rect</span><span class="p">.</span><span class="n">Min</span><span class="p">.</span><span class="n">X</span><span class="p">,</span> <span class="n">i</span> <span class="p">/</span> <span class="n">rect</span><span class="p">.</span><span class="n">Dx</span><span class="p">()</span> <span class="p">+</span> <span class="n">rect</span><span class="p">.</span><span class="n">Min</span><span class="p">.</span><span class="n">Y</span>
+                <span class="n">pixel</span> <span class="p">:=</span> <span class="n">img</span><span class="p">.</span><span class="n">At</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+                <span class="n">r32</span><span class="p">,</span> <span class="n">g32</span><span class="p">,</span> <span class="n">b32</span><span class="p">,</span> <span class="n">a32</span> <span class="p">:=</span> <span class="n">pixel</span><span class="p">.</span><span class="n">RGBA</span><span class="p">()</span>
+                <span class="n">r8</span><span class="p">,</span> <span class="n">g8</span><span class="p">,</span> <span class="n">b8</span><span class="p">,</span> <span class="n">a8</span> <span class="p">:=</span> <span class="nb">uint8</span><span class="p">(</span><span class="n">r32</span><span class="p">),</span> <span class="nb">uint8</span><span class="p">(</span><span class="n">g32</span><span class="p">),</span> <span class="nb">uint8</span><span class="p">(</span><span class="n">b32</span><span class="p">),</span> <span class="nb">uint8</span><span class="p">(</span><span class="n">a32</span><span class="p">)</span>
+
+                <span class="c1">// Executing callback on a given pixel coordinates and RGBA</span>
+                <span class="c1">// color values.</span>
+                <span class="n">fn</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">r8</span><span class="p">,</span> <span class="n">g8</span><span class="p">,</span> <span class="n">b8</span><span class="p">,</span> <span class="n">a8</span><span class="p">)</span>
+        <span class="p">}</span>
+<span class="p">}</span></code></pre>
+
+<p>Such defined iterator can be used as follow:</p>
+
+<pre><code class="language-go"><span class="n">EachPixel</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="k">func</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="nb">int</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">a</span> <span class="nb">uint8</span><span class="p">))</span> <span class="p">{</span>
+        <span class="c1">// do something with colors...</span>
+<span class="p">}</span></code></pre>
+
+<h3 id="Anonymous+imports">Anonymous imports</h3>
+
+<p>While playing with the <a href="http://weekly.golang.org/pkg/image"><strong>image</strong></a> package
+I found a very nice thing. Go allows you to <strong>anonymously import the package</strong>, only
+for its initialization side effects. For example, the <em>image</em> package defines a
+<a href="http://weekly.golang.org/pkg/image#Decode"><code>Decode</code></a> function, which is used to
+read image information from the stream. Function uses registered image formats
+to properly decode the information from <code>io.Reader</code>. Now, each of format-specific
+sub packages registers its decoder in the initializer. The <a href="http://weekly.golang.org/pkg/image/png">image/png</a>
+for example does it this way:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="n">init</span><span class="p">()</span> <span class="p">{</span>
+         <span class="n">image</span><span class="p">.</span><span class="n">RegisterFormat</span><span class="p">(</span><span class="s">"png"</span><span class="p">,</span> <span class="n">pngHeader</span><span class="p">,</span> <span class="n">Decode</span><span class="p">,</span> <span class="n">DecodeConfig</span><span class="p">)</span>
+<span class="p">}</span></code></pre>
+
+<p>Now, if we want to decode information from the <em>png</em> image, we can just anonymously
+import <code>image/png</code> package:</p>
+
+<pre><code class="language-go"><span class="k">import</span> <span class="n">_</span> <span class="s">"image/png"</span></code></pre>
+
+<p>... and use the global <code>image.Decode</code> function:</p>
+
+<pre><code class="language-go"><span class="n">f</span><span class="p">,</span> <span class="n">_</span> <span class="p">:=</span> <span class="n">os</span><span class="p">.</span><span class="n">Open</span><span class="p">(</span><span class="s">"file.png"</span><span class="p">)</span>
+<span class="n">img</span><span class="p">,</span> <span class="n">_</span> <span class="p">:=</span> <span class="n">image</span><span class="p">.</span><span class="n">Decode</span><span class="p">(</span><span class="n">f</span><span class="p">)</span></code></pre>
+
+<p>We can obviously still import this package normally and use <a href="http://weekly.golang.org/pkg/image/png#Decode"><code>png.Decode</code></a>
+directly if needed.</p>
+
+<div class="meme">
+  <img src="/img/meme-stallone-big-1.jpg" alt="This feature is such a big!">
+</div>
+
+
+<h3 id="Summary">Summary</h3>
+
+<p>Ok, enough cool features for today, let's go back to our example. Just to clarify
+things at the end of this article. I'm not saying that writing web apps in Go
+is something totally wrong or bad, nor that you should use Rails to write all
+your web apps. What I want to say is that Go is a little bit different language than
+Ruby, and looking for ruby-like solutions in go is just pointless. Rails, Django or Sinatra
+work good for full stack web applications, while Go performs splendidly while
+powering them up with web-services or tools.</p>
+
+<p>That's all for tonight, like always thanks to <a href="http://twitter.com/poteland">PoTe</a>
+for fixing my terrible english!</p>
+          </article>
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+              var disqus_shortname = 'areyoufuckingcodingme';
+              (function() {
+              var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+              dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+              (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+              })();
+          </script>
+          <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+          <a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a>
+        
+      </div>
+      <footer role="contentinfo">
+        Copyleft 2012 by <a href="http://www.nu7hat.ch/">nu7</a>, Some rights reserved. <br />
+        <small>
+          Follow me on <a href="http://twitter.com/nu7hatch">twitter</a> or see my projects
+          on <a href="http://github.com/nu7hatch">github</a>.<br />
+        </small>
+      </footer>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/js/libs/jquery-1.7.1.min.js"><\/script>')</script>
+    <script src='/js/plugins.js'></script>
+    <script>
+        //Google Analytics
+        var _gaq=[['_setAccount','UA-28812082-1'],['_trackPageview']];
+        (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+        g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+        s.parentNode.insertBefore(g,s)}(document,'script'));
+    </script>
+  </body>
+</html>

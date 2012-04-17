@@ -1,0 +1,452 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Are You Fuckign Coding Me!? - The go tool</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css" media="screen">
+    <meta name="description" content="Distributed computing baby! Go-lang, Ruby, Linux and more!">
+    <meta name="author" content="Krzysztof Kowalik aka. nu7hatch">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="nanoc 3.2.4">
+    <script src="js/libs/modernizr-2.0.6.min.js"></script>
+  </head>
+  <body>
+    <div id="container">
+      <header role="banner">
+        <h1>
+          <a href="/" id="logo">Are You Fucking Coding Me!?</a>
+        </h1>                                                
+        <div class="tagline">
+          <div class="in"><a href="http://www.nu7hat.ch/">by nu7</a></div>
+        </div>
+      </header>
+      <div id="main" role="main">
+        
+          <article class="fullpost" id="2012_2_14_the_go_tool">
+            <header>
+              <h2>The go tool</h2>
+              <div class="info">
+                posted by <span class="fn">nu7</span> /
+                <time class="created_at" datetime="2012-02-14T00:00:00+01:00">
+                  February 14, 2012
+                </time><time >
+              </div>
+            </header>
+            <p>On the wave of the latest weekly release introducing <strong>new go command</strong> I decided to write
+a little about it. I have to admit that when I heard about the idea of unified <strong>go</strong> tool
+for the first time I was little bit skeptic and full of fears. I was worrying that it's gonna
+be fucked up like most of the other language-specific package managers. IMHO most of such
+package managers are reinventing the wheel and coliding with the operating system PMs which
+makes sysadmins' life much harder. What's more, I actually really liked makefiles, they were
+simple and straightforward, and just worked fine. Fortunetely, <strong>new go tool dispelled
+all my fears!</strong></p>
+
+<h3 id="Don't+repeat...">Don't repeat...</h3>
+
+<p>Lot of information about new go tool shown up recently on the
+<a href="http://groups.google.com/group/golang-nuts/browse_thread/thread/b4bb313b64b8ca84/4bc3cda688c04b57?lnk=gst&amp;q=the+go+command#4bc3cda688c04b57"><strong>go nuts</strong></a>
+mailing list. The official go documentation also includes now some short article about
+<a href="http://weekly.golang.org/doc/code.html"><strong>how to write go code</strong></a> using new go tool.</p>
+
+<p>Anyway, I think there's still a gap in the docs at this point, so it makes reasonable to write
+fast introduction to new go tool and demonstrate some usefull tricks.</p>
+
+<h3 id="Convention+over+configuration">Convention over configuration</h3>
+
+<p>That was a source of my biggest fears, mostly because of my experience with Ruby on Rails.
+All Rails-familiar developers shall agree with me that every time when you try to do
+something a little bit hacky, a little bit tricky, something which doesn't follow the
+rules, it's just...</p>
+
+<div class="meme">
+  <img src="/img/meme-impossibru.jpg" alt="IMPOSSIBRU!">
+</div>
+
+
+<p>But let's talk about good practices. First of all, each of the go tools does only one
+thing, and does it right. We have there i.a:</p>
+
+<ul>
+<li>
+<strong><code>go build</code></strong> - to compile the package,</li>
+<li>
+<strong><code>go get</code></strong> - to resolve and install the dependencies,</li>
+<li>
+<strong><code>go test</code></strong> - to run test suites and benchmakrs,</li>
+<li>
+<strong><code>go install</code></strong> - to install the package,</li>
+<li>
+<strong><code>go doc</code></strong> - to generate documentation,</li>
+<li>
+<strong><code>go fmt</code></strong> - to properly format your code,</li>
+<li>
+<strong><code>go run</code></strong> - to build and run the apps,</li>
+<li>
+<strong><code>go tool</code></strong> - to call extra tools,</li>
+<li>etc...</li>
+</ul><p>Go packages <strong>don't have any build configuration</strong> at all. There's no makefiles, no
+descriptions of dependencies etc. How it works then? Everything is retrieved from the
+<strong>source code</strong>. To let the magic happen one thing has to be done first. You need to
+specify where your go stuff will be located. The <strong><code>GOPATH</code></strong> environment variable defines
+paths to the go trees. For example, the following line in your <code>~/.bashrc</code>:</p>
+
+<pre><code class="language-sh"><span class="nv">GOPATH</span><span class="o">=</span><span class="s2">"/home/nu7/gocode"</span></code></pre>
+
+<p>...tells the go tool that your go tree is located in the specified directory. But you
+may ask <strong>what the go tree actually is</strong>? Speaking shortly, it's a place where <strong>all your
+go sources, packages and commands will be located</strong>. Take a look:</p>
+
+<pre><code>$ ls /home/nu7/gocode/
+bin   pkg   src
+</code></pre>
+
+<p>All the sources will be located in the <code>src</code> folder. By all the sources I mean both,
+your applications, packages and dependencies as well. The <code>pkg</code> folder contains compiled
+and installed packages, and <code>bin</code> installed commands.</p>
+
+<p>The <code>GOPATH</code> variable works very similar to <code>PATH</code>, you can set as many go paths
+as you want. You have to only remember that first one is the main one, so all
+the stuff installed via <code>go install</code> will go there.</p>
+
+<h3 id="Resolving+dependencies">Resolving dependencies</h3>
+
+<p>There's no configuration files describing dependecies... so how the heck go tool may
+know what to install and from where to download it! You think there's some repository?
+Nope, there's not! Go introduces something called <strong>importpath</strong>, take a look:</p>
+
+<pre><code class="language-go"><span class="k">import</span> <span class="s">"github.com/nu7hatch/gouuid"</span></code></pre>
+
+<p>The import path is 2 in 1. It's a repository URL and path to the location where the
+package has been installed locally. The <strong><code>go get</code></strong> tool just by looking at the import
+path knows from where to fetch the dependency, and <strong><code>go build</code></strong> knows from where to
+import them locally.</p>
+
+<p>To <strong>install dependencies in your system</strong>, you have to use <code>go get</code> tool that way:</p>
+
+<pre><code>$ go get package-name
+</code></pre>
+
+<p>Wait, wait, wait... what's the package name here? It's the name of the package you
+want to install dependencies for. Assuming you have a package named <code>foo</code> in your go
+sources, calling <code>go get foo</code> will install all its dependencies. You can run the tool
+directly from the package as well:</p>
+
+<pre><code>$ cd ~/gocode/src/foo
+$ go get .
+</code></pre>
+
+<p>All other go tools works the same and can be called directly from the package or
+by specifying it's import path. It's also possible to <strong>execute a tool on the group
+of nested packages</strong> using <strong><code>...</code></strong> (three dots) wildcard. If our <code>foo</code> package contains
+some nested packages, dependecies for all of them can be installed at the same time just
+by calling:</p>
+
+<pre><code>$ go get ./...  
+</code></pre>
+
+<p>If you already have specific dependency installed in your go tree, then <strong>it will be
+not updated</strong> until you explicitly request that. To update packages while installing
+dependencies you need to run <strong><code>go get</code></strong> with <strong><code>-u</code></strong> flag:</p>
+
+<pre><code>$ go get -u package-name
+</code></pre>
+
+<p>Simple, isn't it?</p>
+
+<h3 id="The+dependency+hell!">The dependency hell!</h3>
+
+<p>There's one more convention of the go tool I really like, but I'm afraid of at the
+same time... Go tool resolves dependencies by <strong>checking out HEAD version</strong> of the
+repository. That forces package maintainers to <a href="http://semver.org/"><strong>keep backward compatibility</strong></a>
+and...</p>
+
+<div class="meme">
+  <img src="/img/meme-jules-1.jpg" alt="GREEN MASTER MOTHERFUCKER! DO YOU HAVE IT?">
+</div>
+
+
+<p><strong>Green master policy</strong> is something I was always insisting at my work. The default
+branch is something that people always check out at the beginning, so <strong>it shall be
+green</strong>, or at least <strong>it have to work</strong>! Once officially published, or once reaches
+maturity <strong>it should be backward compatible</strong> as well - we can't deprecate things or
+change the API between the patch or minor versions.</p>
+
+<p>But we all know how it looks like in practice. Lot of people don't give a shit about
+backward compatibility, they treat default branch as a playground, etc. For all those,
+and acually for all developers who want to live in peace with new go tool I have some
+set of rules...</p>
+
+<div class="important">
+  <h4>Rules you should follow in your fucking programmer's life:</h4>
+  <ul>
+<li><strong>Keep your fucking master green!</strong></li>
+    <li><strong>Work on fucking new feature in a fucking separate branch!</strong></li>
+    <li>Once you published your code and someone is using it, <strong>don't fucking 
+    change the API!</strong>
+</li>
+    <li>If you want or need to change the API, <strong>change the fucking major 
+    version</strong> and <strong>work on a fucking separate repository derived 
+    from the original one!</strong>
+</li>
+    <li>If you highly, <strong>very highly</strong> need to use some particular tag, 
+    branch or commit as a dependency, <strong>use your fucking own fork of the repository 
+    pointed by default to the fucking commit you need!</strong>
+</li>
+    <li>Oh, and <strong>keep it simple</strong>, motherfucker!</li>
+  </ul>
+</div>
+
+
+<p>And don't make me recite the Ezechiel's book to make you remember that...</p>
+
+<h3 id="Building+and+installing">Building and installing</h3>
+
+<p>Ok, let's go back to the go command. The <code>go build</code> command is used to compile the
+package. It only builds the package, doesn't install it. What's also important,
+<strong>it requires the package to be checked out in the local source tree</strong>. To install
+remote package you will use <code>go get</code> instead:</p>
+
+<pre><code>$ go get github.com/nu7hatch/gouuid
+</code></pre>
+
+<p>To install local package obviously <code>go install</code> tool will be used. It builds the
+package first (if it's necessary) and then installs it under <code>$GOPATH/pkg</code> or/and
+<code>$GOPATH/bin</code>.</p>
+
+<p>The go tool is also able to <strong>ignore files during the build</strong>, obvioulsy without
+extra flags and special configuration. The only thing you have to do to ignore a file,
+is to prefix its name with underscore:</p>
+
+<pre><code>$ ls
+_bar.go   foo.go
+$ go build .
+</code></pre>
+
+<p>In the example above <code>_bar.go</code> will be ignored during the build.</p>
+
+<p>Hmm, and that's it... I think there's nothing more to say about it, let's move forward.</p>
+
+<h3 id="C+extensions+with+CGO">C extensions with CGO</h3>
+
+<p>Go comes with really great support for <strong>building C extensions</strong> with <a href="http://http://weekly.golang.org/cmd/cgo/">cgo command</a>.
+Actually, to build most of C-powered applications you don't even need to know about <code>cgo</code>,
+the <code>go build</code> tool is more than enough.</p>
+
+<p>To be honest there's not too much to say about <code>cgo</code>, while most of stuff is described
+clearly in the docs and in <a href="http://code.google.com/p/go-wiki/wiki/cgo"><strong>article from the go users wiki</strong></a>.</p>
+
+<p>First thing I'd like to mention is something I really don't like, namely putting C
+source code within the comments as it is presented in most of the official examples.
+You have to know that those examples are presented that way mainly to minimize amount
+of code and show each example in a single file. In a real-life application <strong>C code
+shouldn't be placed in the comments block</strong>! The <code>go build</code> tool is smart enough to
+handle <code>.h</code> and <code>.c</code> files in your package.</p>
+
+<p>Some example? Let's say we want to write simple <code>echo</code> command which prints all
+arguments on the screen, but using the <code>printf</code> function from <code>stdio.h</code>. As it's
+mentioned on the wiki page, <strong>go doesn't allow to call C function with variable
+number of parameters</strong>, so we have to write a small wrapper for the <code>printf</code> function.
+Our code may look like this (also available <a href="http://github.com/nu7hatch/cgoecho">on github</a>):</p>
+
+<p><code>echo.h</code>:</p>
+
+<pre><code class="language-c"><span class="cp">#ifndef _ECHO_H_</span>
+<span class="cp">#define _ECHO_H_</span>
+
+<span class="cp">#include &lt;stdio.h&gt;</span>
+
+<span class="kt">void</span> <span class="n">echo</span><span class="p">(</span><span class="kt">char</span><span class="o">*</span><span class="p">);</span>
+
+<span class="cp">#endif </span><span class="cm">/* _ECHO_H_ */</span><span class="cp"></span></code></pre>
+
+<p><code>echo.c</code>:</p>
+
+<pre><code class="language-c"><span class="cp">#include "echo.h"</span>
+
+<span class="kt">void</span> <span class="nf">echo</span><span class="p">(</span><span class="kt">char</span><span class="o">*</span> <span class="n">s</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">"%s</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">s</span><span class="p">);</span>
+<span class="p">}</span></code></pre>
+
+<p><code>echo.go</code>:</p>
+
+<pre><code class="language-go"><span class="k">package</span> <span class="n">main</span>
+
+<span class="cm">/*</span>
+<span class="cm">#include &lt;stdlib.h&gt;</span>
+<span class="cm">#include "echo.h"</span>
+<span class="cm">*/</span>
+<span class="k">import</span> <span class="s">"C"</span>
+
+<span class="k">import</span> <span class="p">(</span>
+        <span class="s">"flag"</span>
+        <span class="s">"unsafe"</span>
+        <span class="s">"strings"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+        <span class="n">flag</span><span class="p">.</span><span class="n">Parse</span><span class="p">()</span>
+        <span class="n">cs</span> <span class="p">:=</span> <span class="n">C</span><span class="p">.</span><span class="n">CString</span><span class="p">(</span><span class="n">strings</span><span class="p">.</span><span class="n">Join</span><span class="p">(</span><span class="n">flag</span><span class="p">.</span><span class="n">Args</span><span class="p">(),</span> <span class="s">" "</span><span class="p">))</span>
+        <span class="n">C</span><span class="p">.</span><span class="n">echo</span><span class="p">(</span><span class="n">cs</span><span class="p">)</span>
+        <span class="n">C</span><span class="p">.</span><span class="n">free</span><span class="p">(</span><span class="n">unsafe</span><span class="p">.</span><span class="n">Pointer</span><span class="p">(</span><span class="n">cs</span><span class="p">))</span>
+<span class="p">}</span></code></pre>
+
+<p>Now you can build all the things seamlessly with the <code>go build</code> tool. It will
+recognize and compile all C files found in your package. Speaking shortly it
+just works!</p>
+
+<div class="meme">
+  <img src="/img/meme-notbad-1.jpg" alt="NOT BAD">
+</div>
+
+
+<h3 id="Platform+specific+builds">Platform specific builds</h3>
+
+<p>Another cool and interesting thing is that <code>go build</code> can handle compilation of
+platform specific files. It recognizes such files by its names (it has to be like
+<code>file_GOOS_GOARCH.go</code> or <code>file_GOARCH.go</code>):</p>
+
+<pre><code>foo_darwin_amd64.go
+foo_386.go
+foo.go
+</code></pre>
+
+<p>This feature works with C files as well:</p>
+
+<pre><code>foo_amd64.c
+foo_386.c
+foo.h
+foo.go
+</code></pre>
+
+<p>As they say in the docs, you may never need that features, but I wanted to mention
+it to give you a picture of how flexible the go tool is despite its simplicity.</p>
+
+<p>Ok, but some of you may ask, what if there's a need to do some tricky thing which
+requires weird compiler flags or some configuration, etc...</p>
+
+<h3 id="Makefile+to+the+rescue!">Makefile to the rescue!</h3>
+
+<p>Yes, don't be afraid of using makefiles! It's the easiest and quite convenient
+way to deal with extra configuration, some prerequisites etc. Makefiles can
+be helpful not only in C extensions but in multi-package applications as well
+(eg. in <a href="http://github.com/webrocket/webrocket">webrocket</a> we're using a top
+level  makefile to make our life easier).</p>
+
+<p>More explicit example... Imagine an application which contains a core package and
+a command line tool based on it. We can stick to the echo example, but in more
+modular way:</p>
+
+<pre><code>echo/
+  pkg/
+    echo/
+      echo.c
+      echo.h
+      echo.go
+  cmd/
+    echo/
+      echo.go
+</code></pre>
+
+<p>We want the <code>pkg/echo</code> package to provide a reusable wrapper for C <code>printf</code> function,
+and its source looks almost the same as in previous example. The <code>cmd/echo</code> command
+is going to be an executable which is using the core package to display things on the
+screen. The <code>cmd/echo</code> command may look like this:</p>
+
+<pre><code class="language-go"><span class="k">package</span> <span class="n">main</span>
+
+<span class="k">import</span> <span class="p">(</span>
+        <span class="s">"github.com/nu7hatch/cgoecho2/pkg/echo"</span>
+        <span class="s">"flag"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+        <span class="n">flag</span><span class="p">.</span><span class="n">Parse</span><span class="p">()</span>
+        <span class="n">echo</span><span class="p">.</span><span class="n">Echo</span><span class="p">(</span><span class="n">flag</span><span class="p">.</span><span class="n">Args</span><span class="p">()...)</span>
+<span class="p">}</span></code></pre>
+
+<p><strong>Note:</strong> For those who don't know what <code>slice...</code> means, it just maps a slice to
+variable number of arguments, something like <code>*args</code> in Ruby.</p>
+
+<p>Going back, to simplyfy our work with the package we need some <code>Makefile</code>. It may look
+like this:</p>
+
+<pre><code class="language-make"><span class="nf">all</span><span class="o">:</span> <span class="m">echo-pkg echo-cmd</span>
+
+<span class="nf">echo-pkg</span><span class="o">:</span>
+    go build ./pkg/echo
+
+<span class="nf">echo-cmd</span><span class="o">:</span>
+    go build ./cmd/echo</code></pre>
+
+<p>Now we are able to quickly compile both, package and command just by calling <strong><code>make</code></strong>,
+and what's more important, <strong>we can still use the go command to install it remotely</strong>:</p>
+
+<pre><code>$ go get github.com/nu7hatch/cgoecho2/cmd/echo
+</code></pre>
+
+<p>Of course this is very simple example, we can use the wildcard call to build all the stuff
+quicky and with no fuss:</p>
+
+<pre><code>$ go build ./...
+</code></pre>
+
+<p>But dealing with bigger applications, containing many packages and/or commands may
+be tricky. Then <strong>it's very reasonable</strong> to use makefiles, shell scripts or any other
+build tool you like.</p>
+
+<h3 id="Summary">Summary</h3>
+
+<p>I have to say it clearly, <strong>I fucking love new go tool</strong>! I encountered bunch of problems
+while playing with it for the first time, but most of the issues was caused by some bad
+habits I've gained while using other package mangers/tools. Hah, recently I asked a lot
+of stupid question on the go-nuts IRC channel and the answers I get were ridiculously
+obvious and simple...</p>
+
+<p>Now looking through my shoulder at all the tools I was using before, like <code>easy_install</code>,
+<code>rubygems</code> or <code>bundler</code>, I have only one picture of them in my mind... Oh, I'll better
+not publish it because more people may hate me :). Instead, I can show you how do I
+see the new go tool...</p>
+
+<div class="meme">
+  <img src="/img/meme-superman-1.jpg" alt="...">
+</div>
+
+
+<p>I'm very happy to see Go going in a good direction! That's all for today, take care
+Gophers!</p>
+          </article>
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+              var disqus_shortname = 'areyoufuckingcodingme';
+              (function() {
+              var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+              dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+              (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+              })();
+          </script>
+          <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+          <a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a>
+        
+      </div>
+      <footer role="contentinfo">
+        Copyleft 2012 by <a href="http://www.nu7hat.ch/">nu7</a>, Some rights reserved. <br />
+        <small>
+          Follow me on <a href="http://twitter.com/nu7hatch">twitter</a> or see my projects
+          on <a href="http://github.com/nu7hatch">github</a>.<br />
+        </small>
+      </footer>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/js/libs/jquery-1.7.1.min.js"><\/script>')</script>
+    <script src='/js/plugins.js'></script>
+    <script>
+        //Google Analytics
+        var _gaq=[['_setAccount','UA-28812082-1'],['_trackPageview']];
+        (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+        g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+        s.parentNode.insertBefore(g,s)}(document,'script'));
+    </script>
+  </body>
+</html>
