@@ -55,7 +55,7 @@ namespace :optimize do
   end
 
   desc 'Optimize all JPG, PNG, Stylesheet and JavaScript files in the output directory'
-  task :all => [:jpg, :png, :javascripts, :stylesheets]
+  task :all => [:jpg, :png] #, :javascripts, :stylesheets]
 end
 
 # Use this method to change the base url in the configuration file
