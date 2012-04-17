@@ -310,7 +310,7 @@ I'm curious about your oppinions and feedback about the stuff I wrote. From the 
 reaserch I've been doing everyone appears to love getting rid of `GOPATH` in favor
 of local environments. A few persons I asked around are still confused about
 dealing with submodules - to be honest I'm not 100% convinced to this
-approach yet, but so far its the best I've found and matches the requirements
+approach yet, but so far it's the best I've found and matches the requirements
 I wrote down. I'm sure we can improve that part together. That's all folks,
 waiting for your comments.
 
