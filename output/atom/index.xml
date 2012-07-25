@@ -2,13 +2,207 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
   <id>http://areyoufuckingcoding.me/</id>
   <title>Are You Fucking Coding Me!?</title>
-  <updated>2012-04-15T22:00:00Z</updated>
+  <updated>2012-07-24T22:00:00Z</updated>
   <link rel="alternate" href="http://areyoufuckingcoding.me/"/>
   <link rel="self" href="http://feeds.feedburner.com/areyoufuckingcodingme"/>
   <author>
     <name>Krzysztof Kowalik</name>
     <uri>http://areyoufuckingcoding.me</uri>
   </author>
+  <entry>
+    <id>tag:areyoufuckingcoding.me,2012-07-25:/2012/07/25/object-desoriented-language/</id>
+    <title type="html">Object desoriented language</title>
+    <published>2012-07-24T22:00:00Z</published>
+    <updated>2012-07-24T22:00:00Z</updated>
+    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/07/25/object-desoriented-language/"/>
+    <content type="html">&lt;p&gt;Ugh, finally I have spare time back to write something here. I hope you missed me?
+This time it will be a short note, which is gonna explain the question I hear
+every time when I talk about Go, namely:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;strong&gt;is golang object oriented language?&lt;/strong&gt;
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;To be honest I'm sick of hearing that question over and over. My plan is
+to describe this stuff here, print the URL out on a business card and give it
+away every time when some OOP fans will ask me about it.&lt;/p&gt;
+
+&lt;h3 id="Structs+at+a+glance"&gt;Structs at a glance&lt;/h3&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-magic-1.jpg" alt="Magic!"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;Speaking shortly, there is no strict answer to our holy question. Golang structs at
+a glance can act like objects and may seem to provide inheritance model, eg.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;Person&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;Name&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;p&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;Person&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Intro&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Name&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;Woman&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;Person&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;Woman&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Intro&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s"&gt;"Mrs. "&lt;/span&gt; &lt;span class="p"&gt;+&lt;/span&gt; &lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Person&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Intro&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;In the example above we have the simplest example of something which most of you would
+call &lt;strong&gt;inheritance&lt;/strong&gt;. For now, let's say that &lt;code&gt;Woman&lt;/code&gt; inherits from &lt;code&gt;Person&lt;/code&gt;. The &lt;code&gt;Woman&lt;/code&gt; type
+contains all the fields from &lt;code&gt;Person&lt;/code&gt;, can override its functions, can do something like
+superclass calls. As I said, at a glance it may look like inheritance. Yeah... but it's
+just a trick!&lt;/p&gt;
+
+&lt;h3 id="Is+it?"&gt;Is it?&lt;/h3&gt;
+
+&lt;p&gt;Let's take a closer look and let me explain how it works under the hood. First of all, there's no
+real inheritance here. It would be great if you could forget all you know about inheritance while
+you read this stuff... Snap!&lt;/p&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-mib-1.jpg" alt="Inheritance? What's inheritance?"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;Now, imagine struct as a box. Simple, gray, carton box... and imagine fields as &lt;em&gt;things&lt;/em&gt;, some magic
+items you can put inside the box. Here's an example:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;SmallBox&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;BaseballCards&lt;/span&gt;   &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+        &lt;span class="n"&gt;BubbleGumsCount&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt;
+        &lt;span class="n"&gt;AnyMagicItem&lt;/span&gt;    &lt;span class="n"&gt;bool&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Yeah, that's how our small box may look like. But some day a small box may not be enough, huh?
+Or maybe you'd like to segregate your stuff. Then you can take a big box, and put small one
+together with other stuff inside, for example:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;BigBox&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;SmallBox&lt;/span&gt;
+        &lt;span class="n"&gt;Books&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+        &lt;span class="n"&gt;Toys&lt;/span&gt;  &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Splendid, we have a big box which contains all the stuff we have in the small one, plus
+some books and toys. And now the magic happens... we can ask:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  what's in the big box?
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;We can answer in a various ways. We can say quickly, that there are books, toys and some small
+box, or &lt;strong&gt;we can be more specific&lt;/strong&gt; saying that there are toys, books, baseball cards and
+some magic items. Both answers will be correct, only on different detail level.
+Golang also allows you to specify that level of detail, eg.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;BigBox&lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;BubbleGumsCount&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;          &lt;span class="c1"&gt;// correct...&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;AnyMagicItem&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;true&lt;/span&gt; &lt;span class="c1"&gt;// also correct&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Speaking shortly, &lt;code&gt;BigBox&lt;/code&gt; &lt;strong&gt;is not a kind of&lt;/strong&gt; &lt;code&gt;SmallBox&lt;/code&gt;, it just &lt;strong&gt;contains&lt;/strong&gt; one &lt;code&gt;SmallBox&lt;/code&gt;
+inside, and provides shorthands to &lt;code&gt;SmallBox&lt;/code&gt; fields.&lt;/p&gt;
+
+&lt;h3 id="Overriding?"&gt;Overriding?&lt;/h3&gt;
+
+&lt;p&gt;In the very first example you saw something like method overriding. Again, you have to forget
+about such a term. That magic thing was nothing more than calling a funciton of the
+box sitting inside, from the outer box, like here:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;sb&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="mi"&gt;20&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bb&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;BigBox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;bb&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We defined that a &lt;code&gt;BigBox&lt;/code&gt; can store three times more items than the small one, but we're
+not overwriting the &lt;code&gt;SmallBox&lt;/code&gt; function here. We can still access them both, obviously
+because they belong to different boxes.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;          &lt;span class="c1"&gt;// =&amp;gt; 60&lt;/span&gt;
+&lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; 20&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;However, unambigous functions may be called from outer box using shorthands:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;sb&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Color&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s"&gt;"gray"&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="c1"&gt;// *snip*&lt;/span&gt;
+
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Color&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; "gray"&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Color&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;          &lt;span class="c1"&gt;// =&amp;gt; "gray"&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;This is the killer feature which brings fresh breath of the inheritance into Go code.
+The &lt;code&gt;Color&lt;/code&gt; in both calls refers to the same function bound to &lt;code&gt;SmallBox&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h3 id="Memory+skinflints!"&gt;Memory skinflints!&lt;/h3&gt;
+
+&lt;p&gt;Golang in general is a system programming language, and allows us to manage memory
+up to some abstract point by using pointers. We can use it to save up some memory
+also by defining structs. We can assume that our &lt;code&gt;BigBox&lt;/code&gt; may, or may not have
+a &lt;code&gt;SmallBox&lt;/code&gt; inside. Until now we've been always keeping memory allocated for a small
+box, even though it was not used. We can do this little bit more efficient by embedding
+a pointer in our struct:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;SkinflintBigBox&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;
+        &lt;span class="n"&gt;Books&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+        &lt;span class="n"&gt;Toys&lt;/span&gt;  &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;But there's one trick in here, this &lt;strong&gt;embedded structure acts the same manner as any
+other pointer&lt;/strong&gt;, so first of all we have to remember to &lt;strong&gt;initialize it&lt;/strong&gt;, otherwise
+a lot of bad things may happen:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;SkinflintBigBox&lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;     &lt;span class="c1"&gt;// =&amp;gt; nil&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;AnyMagicItem&lt;/span&gt; &lt;span class="c1"&gt;// ...&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-panic-1.gif" alt="Panic!"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;We have to initialize our small box the same way as any other pointer field:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;SkinflintBigBox&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="n"&gt;AnyMagicItem&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;true&lt;/span&gt;&lt;span class="p"&gt;}}&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;AnyMagicItem&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; true&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Yay! Everything works fine now! Also you may want to know that embedded pointer
+&lt;strong&gt;can be initialized at any time&lt;/strong&gt;, it doesn't have to be done during the outer
+structure's initialization.&lt;/p&gt;
+
+&lt;h3 id="It's+not+magic,+it's+a+trick..."&gt;It's not magic, it's a trick...&lt;/h3&gt;
+
+&lt;p&gt;Summarizing, there's no magic here. So called inheritance it's just a special
+kind of field which provides shorthands to its functions. Simple, clever and
+enough to say OOP fanboys:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  Sure, it's OOP... &lt;strong&gt;Go&lt;/strong&gt; for it!
+&lt;/blockquote&gt;
+
+
+
+
+&lt;br&gt;&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-ilied-1.jpg" alt="I lied!"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;That's all folks, I hope you like and it and prepare for more stuff soon,
+We have a lot to catch up with!&lt;/p&gt;</content>
+  </entry>
   <entry>
     <id>tag:areyoufuckingcoding.me,2012-04-16:/2012/04/16/dpendency-hell/</id>
     <title type="html">Dependency Hell</title>
@@ -1461,283 +1655,5 @@ see the new go tool...&lt;/p&gt;
 
 &lt;p&gt;I'm very happy to see Go going in a good direction! That's all for today, take care
 Gophers!&lt;/p&gt;</content>
-  </entry>
-  <entry>
-    <id>tag:areyoufuckingcoding.me,2012-02-06:/2012/02/06/netchan-is-no-more-shall-be-chanio/</id>
-    <title type="html">NetChan is no more, shall be ChanIO?</title>
-    <published>2012-02-05T23:00:00Z</published>
-    <updated>2012-02-05T23:00:00Z</updated>
-    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/02/06/netchan-is-no-more-shall-be-chanio/"/>
-    <content type="html">&lt;p&gt;Aaah, I just came back from a short backpacking trip to Argentina, refreshed
-and full of energy! Yeap, it's a great time to write my first real blog post...&lt;/p&gt;
-
-&lt;h3 id="Not+for+newbies..."&gt;Not for newbies...&lt;/h3&gt;
-
-&lt;p&gt;I have to clarify something first. You have to be aware that it's not gonna
-be a blog for total newbies. You have to know at least basics of Go and you can
-learn it by going through &lt;a href="http://tour.golang.org/#1"&gt;&lt;strong&gt;Interactive Go Tour&lt;/strong&gt;&lt;/a&gt;.
-If you haven't seen it yet, &lt;strong&gt;go there&lt;/strong&gt; and &lt;strong&gt;come back when you finish&lt;/strong&gt;!&lt;/p&gt;
-
-&lt;p&gt;&lt;strong&gt;Yes, you have to read it!&lt;/strong&gt;&lt;/p&gt;
-
-&lt;h3 id="What's+up+with+NetChan?"&gt;What's up with NetChan?&lt;/h3&gt;
-
-&lt;p&gt;Current stable release of Go (r60) still has netchan in the standard packages, but
-it has already been changed in the weekly release and netchan will be not included to Go 1.
-What can we do instead then? Nothing!&lt;/p&gt;
-
-&lt;p&gt;There's no official package which provides network wrappers for the channels,
-but &lt;a href="http://groups.google.com/group/golang-nuts/browse_thread/thread/12bdd37ad9ed4a68?pli=1"&gt;this TLTR thread&lt;/a&gt;
-on &lt;a href="http://groups.google.com/group/golang-nuts/"&gt;Go nuts mailing list&lt;/a&gt; brought up a
-few nice ideas. The one I liked the most is a wrapper which allows to bind the
-channel with any kind of &lt;a href="http://weekly.golang.org/pkg/io/#Reader"&gt;&lt;code&gt;io.Reader&lt;/code&gt;&lt;/a&gt;
-or &lt;a href="http://weekly.golang.org/pkg/io/#Writer"&gt;&lt;code&gt;io.Writer&lt;/code&gt;&lt;/a&gt;. It sounds like a fun
-thing to do and great exercise to learn something, let's implement it then!&lt;/p&gt;
-
-&lt;h3 id="Specification"&gt;Specification&lt;/h3&gt;
-
-&lt;p&gt;So, we want to have a package implementing the following features:&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;it should allow to read data from an &lt;code&gt;io.Reader&lt;/code&gt; by consuming from the channel&lt;/li&gt;
-&lt;li&gt;it should allow to write data to an &lt;code&gt;io.Writer&lt;/code&gt; by publishing to the channel&lt;/li&gt;
-&lt;li&gt;it should be able to read and write any kind of Go values&lt;/li&gt;
-&lt;li&gt;it should be thread-safe&lt;/li&gt;
-&lt;/ul&gt;&lt;h3 id="Any+kind+of+value?"&gt;Any kind of value?&lt;/h3&gt;
-
-&lt;p&gt;First two requirements seems to be very obvious, let's take a look at the third
-one. As you should know, channel needs to have defined a type of the data which
-can operate:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;make&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="s"&gt;"hello"&lt;/span&gt; &lt;span class="c1"&gt;// wrong! type error during the compilation&lt;/span&gt;
-&lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;       &lt;span class="c1"&gt;// ok&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Cool, so let's define a constructor which takes an &lt;code&gt;io.Reader&lt;/code&gt;/&lt;code&gt;io.Writer&lt;/code&gt; and
-type of the data as a paramemeters... Yay!&lt;/p&gt;
-
-&lt;div class="meme"&gt;
-  &lt;img src="/img/meme-nope-1.jpg" alt="NOPE!"&gt;
-&lt;/div&gt;
-
-
-&lt;p&gt;Why not? Because it's simply impossible to use a type as a parameter/variable.
-In Ruby, for example, you can do this:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="n"&gt;arr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;Array&lt;/span&gt;
-&lt;span class="n"&gt;hello&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;arr&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"hello"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"world"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;But this is not Ruby and you can't do it... Problem? Oh, do I hear rubyists
-saying now &lt;em&gt;"naah, that language sucks!"&lt;/em&gt;? :)&lt;/p&gt;
-
-&lt;p&gt;Ok, let's think about it for a second... Do we actually need to care about the
-type at all? We could give users more freedom by working on interface channels.
-Take a look:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;make&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="k"&gt;interface&lt;/span&gt;&lt;span class="p"&gt;{})&lt;/span&gt;
-&lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="s"&gt;"hello"&lt;/span&gt; &lt;span class="c1"&gt;// ok&lt;/span&gt;
-&lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;       &lt;span class="c1"&gt;// ok too!&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Quack quack! By the power of duck typing! So now things get simpler, we just
-need to write a wrapper for the &lt;code&gt;chan interface{}&lt;/code&gt;. Looks cool, but it has one
-small disadvantage... it's not idiot-proof:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;ch&lt;/span&gt;
-&lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;.(&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;The code above will compile, because it uses type assertion to get a string
-value from the interface. But what do you think is going to happen when the
-channel will receive a value of any other type, different than string...&lt;/p&gt;
-
-&lt;div class="meme"&gt;
-  &lt;img src="/img/meme-panic-1.gif" alt="PANIC!"&gt;
-&lt;/div&gt;
-
-
-&lt;p&gt;We can prevent that situation by checking if the type assertion was correct:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="n"&gt;ch&lt;/span&gt;
-&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;str&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ok&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;.(&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt; &lt;span class="n"&gt;ok&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-        &lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;str&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-        &lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Fprintf&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Stderr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s"&gt;"%v is not a string!"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;I think that I don't need to explain how it works... you should remember it
-from the Go Tutorial. Anyway, it's very important to &lt;strong&gt;check if assertion was
-correct&lt;/strong&gt; always when you are &lt;strong&gt;not sure&lt;/strong&gt; about the type of the interface's value.&lt;/p&gt;
-
-&lt;p&gt;Regardless type assertions, this way looks good and simple enough to implement,
-let's move forward then.&lt;/p&gt;
-
-&lt;h3 id="Reading+and+Writing"&gt;Reading and Writing&lt;/h3&gt;
-
-&lt;p&gt;As I said, first two requirements seems to be clear and explicit. But now
-we have to consider them to be compliant with the third one. So we need to
-be able to write (serialize) any kind of the data into IO stream.&lt;/p&gt;
-
-&lt;p&gt;Go provides an awesome solution of this problem in its standard library.
-There's a package called &lt;a href="http://weekly.golang.org/pkg/encoding/gob/"&gt;&lt;code&gt;encoding/gob&lt;/code&gt;&lt;/a&gt;,
-which implements &lt;strong&gt;exchanging of binary encoded Go values&lt;/strong&gt; between transmiter
-(&lt;code&gt;io.Writer&lt;/code&gt;) and receiver (&lt;code&gt;io.Reader&lt;/code&gt;). This is it! Here's a trivial example of
-how it works:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"~/wire.gob"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="n"&gt;en&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;gob&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;NewEncoder&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="n"&gt;en&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Encode&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="n"&gt;en&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Encode&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"hello"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-
-&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Seek&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SEEK_SET&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="n"&gt;de&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;gob&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;NewDecoder&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="k"&gt;var&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt;
-&lt;span class="k"&gt;var&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;
-&lt;span class="n"&gt;_&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;de&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Decode&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; 1&lt;/span&gt;
-&lt;span class="n"&gt;_&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;de&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Decode&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; "hello"&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;strong&gt;Note!&lt;/strong&gt; I'm leaving &lt;code&gt;"_"&lt;/code&gt; (ignored value) declaration in single-value context
-intentionaly, it's just to let you know that error shall be handled there.&lt;/p&gt;
-
-&lt;p&gt;Current gob implementation has a few limitations, for example to serialize/deserialize
-some custom structure, first you need to &lt;strong&gt;register it&lt;/strong&gt;:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;Cat&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-        &lt;span class="n"&gt;Cuteness&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt; 
-&lt;span class="p"&gt;}&lt;/span&gt;
-
-&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;init&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-        &lt;span class="n"&gt;gob&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Register&lt;/span&gt;&lt;span class="p"&gt;(&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;Cat&lt;/span&gt;&lt;span class="p"&gt;{})&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Chuck Testa already explained you that it's not possible to pass a type as a
-parameter, so gob uses a neat trick to register new type. It gets an &lt;strong&gt;empty
-pointer to the struct&lt;/strong&gt; as a parameter. That allows it to identify the struct's
-fields, functions, etc, and later, quickly and efficiently serialize/deserialize
-values of that type.&lt;/p&gt;
-
-&lt;p&gt;Btw, you know what &lt;code&gt;init&lt;/code&gt; function does... right? If not, get the fuck out and
-go through that &lt;a href="http://tour.golang.org/#1"&gt;&lt;strong&gt;Go Tour&lt;/strong&gt;&lt;/a&gt;!&lt;/p&gt;
-
-&lt;h3 id="Implementing+a+Writer"&gt;Implementing a Writer&lt;/h3&gt;
-
-&lt;p&gt;Let's write some real, working code now. Binding a channel with specified
-&lt;code&gt;io.Writer&lt;/code&gt; can be done in two ways:&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;get a channel as a parameter&lt;/li&gt;
-&lt;li&gt;create new channel, bind it with a given writer and return it&lt;/li&gt;
-&lt;/ul&gt;&lt;p&gt;First approach seems reasonable and may give a lot of flexibility to the users,
-but if we will look at it closer it may also allow them to &lt;strong&gt;fuck things up&lt;/strong&gt;.
-For example, user can read data from the same channel he specified as a binding
-for the writer, which may cause &lt;strong&gt;data corruption&lt;/strong&gt;.&lt;/p&gt;
-
-&lt;p&gt;To keep this implementation simple and clean, let's assume that users wont
-allow be able to bind an IO with existing channel. We should also prevent users
-from reading data from the returned channel. It can be done by returning the
-directional (write-only) channel:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;make&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt;&lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="k"&gt;interface&lt;/span&gt;&lt;span class="p"&gt;{})&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Ups, we have a problem here... If we will create a write only channel, then we're
-screwed, becase we can't read from it! But no worries, don't panic, everything's
-gonna be alright! Go has a neat solution for that as well. We can use a bi-directional
-channel as a directional one just by assignment:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;var&lt;/span&gt; &lt;span class="n"&gt;wch&lt;/span&gt; &lt;span class="k"&gt;chan&lt;/span&gt;&lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;   &lt;span class="c1"&gt;// write-only channel&lt;/span&gt;
-&lt;span class="k"&gt;var&lt;/span&gt; &lt;span class="n"&gt;rch&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;   &lt;span class="c1"&gt;// read-only channel&lt;/span&gt;
-&lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;make&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="c1"&gt;// bi-directional channel&lt;/span&gt;
-&lt;span class="n"&gt;wch&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;rch&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;ch&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ch&lt;/span&gt;
-&lt;span class="n"&gt;wch&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="s"&gt;"hello"&lt;/span&gt;
-&lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;rch&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;      &lt;span class="c1"&gt;// =&amp;gt; "hello"&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;As you can see, we can assign the bi-directional channel to both directional ones,
-which allows us to use a write-only channel to publish data, and a read-only channel
-to consume it.&lt;/p&gt;
-
-&lt;div class="meme"&gt;
-  &lt;img src="/img/meme-marvelous-1.jpg" alt="MARVELOUS!"&gt;
-&lt;/div&gt;
-
-
-&lt;p&gt;Now we can use that ability and create an internal channel for reading under
-the hood, exposing the write-only part to the user. This is how our writer
-implementation may look like:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;NewWriter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt; &lt;span class="n"&gt;io&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Writer&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;chan&lt;/span&gt;&lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="k"&gt;interface&lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-        &lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;make&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="k"&gt;interface&lt;/span&gt;&lt;span class="p"&gt;{})&lt;/span&gt;
-        &lt;span class="k"&gt;go&lt;/span&gt; &lt;span class="n"&gt;write&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ch&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="c1"&gt;// spawning the worker function into another goroutine&lt;/span&gt;
-        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;ch&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt;
-
-&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;write&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt; &lt;span class="n"&gt;io&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Writer&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="k"&gt;interface&lt;/span&gt;&lt;span class="p"&gt;{})&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-        &lt;span class="n"&gt;enc&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;gob&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;NewEncoder&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="k"&gt;range&lt;/span&gt; &lt;span class="n"&gt;ch&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-                &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;enc&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Encode&lt;/span&gt;&lt;span class="p"&gt;(&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;packet&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;});&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;==&lt;/span&gt; &lt;span class="n"&gt;io&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;EOF&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-                        &lt;span class="k"&gt;break&lt;/span&gt;
-                &lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-                        &lt;span class="k"&gt;continue&lt;/span&gt;
-                &lt;span class="p"&gt;}&lt;/span&gt;
-        &lt;span class="p"&gt;}&lt;/span&gt;
-        &lt;span class="c1"&gt;// ...&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Yeap, that's it. Trivial, isn't it? I don't know if I need to explain aything,
-you should understand this code easily. From the same reason I'm not going to
-describe the reader's implementation here. You can find a fully working, tested
-and goinstallable package &lt;a href="http://github.com/nu7hatch/gochanio"&gt;here&lt;/a&gt;. Feel free
-to fork it and play with it.&lt;/p&gt;
-
-&lt;h3 id="Be+or+not+to+be+(in+standard+packages)"&gt;Be or not to be (in standard packages)&lt;/h3&gt;
-
-&lt;p&gt;Looking at the snippet above now, I have to admit that @kevlar_work was absolutelly
-right during our IRC conversation - &lt;strong&gt;it's extremely easy to exchange data via
-channels over the network&lt;/strong&gt;. So now I'm sure there's no need to have such a generic
-solution in the standard library.&lt;/p&gt;
-
-&lt;p&gt;But there's one more thing I can't stop thinking about. During our conversation
-about chanio on go-nuts mailing list, Kyle Lemons came across the huge problem
-of sharing channels over the network. By sharing channels I mean sending channels
-via network channels and converting them into network channels...&lt;/p&gt;
-
-&lt;div class="meme"&gt;
-  &lt;img src="/img/meme-inception-1.jpg"&gt;
-&lt;/div&gt;
-
-
-&lt;p&gt;Yeah, sounds ridiculous, but the idea is actually really nice. Imagine that you can
-share a structure containing internal channel over the network chan. If the
-network channel (or serializer) were able to figure out how to convert that
-internal chan into chanio on the fly it would be awesome! Right!? Right?...&lt;/p&gt;
-
-&lt;p&gt;Actually... &lt;strong&gt;no&lt;/strong&gt;! The &lt;a href="http://www.faqs.org/docs/artu/ch01s07.html"&gt;&lt;strong&gt;K.I.S.S. principle&lt;/strong&gt;&lt;/a&gt;,
-you remember that? Besides keeping it simple, we have to be &lt;a href="http://en.wikipedia.org/wiki/Lean_software_development"&gt;&lt;strong&gt;lean&lt;/strong&gt;&lt;/a&gt;,
-and think about possible &lt;em&gt;clients/users&lt;/em&gt; and their use cases (&lt;em&gt;Eliminate waste&lt;/em&gt;).
-If you start thinking about real life use cases you'll figure it out quickly that
-all of them can be solved easier, more efficient and reliable with some dedicated
-solutions. There's a humongous number of possible configurations, consistency and verbosity
-levels, efficiency requirements, etc. For example, to share important financial data
-requiring maximal consistency I would choose something like &lt;a href="http://rfc.zeromq.org/spec:7"&gt;Majordomo&lt;/a&gt;.
-In the other hand, real time weather notifications can be fault tolerant so we
-can skip the whole heartbeat mechanism and just don't give a shit when messages are
-lost. &lt;strong&gt;Using right tool to solve concrete problem&lt;/strong&gt;, that's the important thing...&lt;/p&gt;
-
-&lt;h3 id="Summary"&gt;Summary&lt;/h3&gt;
-
-&lt;p&gt;Ok, that's all folks in this first real post in this blog. Here's what you should remember
-from this lesson:&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Always check if type assertion was correct if you're not sure about the type of
-the interface's value.&lt;/li&gt;
-&lt;li&gt;You can expose bi-directional channels easily to read/write-only ones just by
-assignment.&lt;/li&gt;
-&lt;li&gt;The gob package is a great tool to serialize and exchange Go values between
-instances - of course remember about registering custom structures.&lt;/li&gt;
-&lt;li&gt;Eliminate waste - first rule of &lt;em&gt;Lean Software Development&lt;/em&gt;, first validate if
-there's real need for your feature.&lt;/li&gt;
-&lt;li&gt;And obviously... Keep It Simple, Stupid!&lt;/li&gt;
-&lt;/ul&gt;&lt;p&gt;Hope you enjoyed this article, comments are just down here, &lt;strong&gt;don't be shy&lt;/strong&gt;! I'm
-very curious about your feedback :).&lt;/p&gt;
-
-&lt;p&gt;Oh, and thanks to &lt;a href="http://twitter.com/poteland"&gt;PoTe&lt;/a&gt; for the language nitpicks!&lt;/p&gt;</content>
   </entry>
 </feed>

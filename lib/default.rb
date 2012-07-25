@@ -1,6 +1,8 @@
 # All files in the 'lib' directory will be loaded
 # before nanoc starts compiling.
 
+$stdout.sync = true
+
 require 'time'
 
 include Nanoc3::Helpers::Rendering

@@ -1,0 +1,256 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Are You Fuckign Coding Me!? - Object desoriented language</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css" media="screen">
+    <meta name="description" content="Distributed computing baby! Go-lang, Ruby, Linux and more!">
+    <meta name="author" content="Krzysztof Kowalik aka. nu7hatch">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="nanoc 3.2.4">
+    <script src="js/libs/modernizr-2.0.6.min.js"></script>
+  </head>
+  <body>
+    <div id="container">
+      <header role="banner">
+        <h1>
+          <a href="/" id="logo">Are You Fucking Coding Me!?</a>
+        </h1>                                                
+        <div class="tagline">
+          <div class="in"><a href="http://www.nu7hat.ch/">by nu7</a></div>
+        </div>
+      </header>
+      <div id="main" role="main">
+        
+          <article class="fullpost" id="2012_7_25_object_desoriented_language">
+            <header>
+              <h2>Object desoriented language</h2>
+              <div class="info">
+                posted by <span class="fn">nu7</span> /
+                <time class="created_at" datetime="2012-07-25T00:00:00+02:00">
+                  July 25, 2012
+                </time><time >
+              </div>
+            </header>
+            <p>Ugh, finally I have spare time back to write something here. I hope you missed me?
+This time it will be a short note, which is gonna explain the question I hear
+every time when I talk about Go, namely:</p>
+
+<blockquote>
+  <strong>is golang object oriented language?</strong>
+</blockquote>
+
+
+<p>To be honest I'm sick of hearing that question over and over. My plan is
+to describe this stuff here, print the URL out on a business card and give it
+away every time when some OOP fans will ask me about it.</p>
+
+<h3 id="Structs+at+a+glance">Structs at a glance</h3>
+
+<div class="meme">
+  <img src="/img/meme-magic-1.jpg" alt="Magic!">
+</div>
+
+
+<p>Speaking shortly, there is no strict answer to our holy question. Golang structs at
+a glance can act like objects and may seem to provide inheritance model, eg.</p>
+
+<pre><code class="language-go"><span class="k">type</span> <span class="n">Person</span> <span class="k">struct</span> <span class="p">{</span>
+        <span class="n">Name</span> <span class="nb">string</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="p">(</span><span class="n">p</span> <span class="p">*</span><span class="n">Person</span><span class="p">)</span> <span class="n">Intro</span><span class="p">()</span> <span class="nb">string</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">p</span><span class="p">.</span><span class="n">Name</span>
+<span class="p">}</span>
+
+<span class="k">type</span> <span class="n">Woman</span> <span class="k">struct</span> <span class="p">{</span>
+        <span class="n">Person</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="p">(</span><span class="n">w</span> <span class="p">*</span><span class="n">Woman</span><span class="p">)</span> <span class="n">Intro</span><span class="p">()</span> <span class="nb">string</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="s">"Mrs. "</span> <span class="p">+</span> <span class="n">w</span><span class="p">.</span><span class="n">Person</span><span class="p">.</span><span class="n">Intro</span><span class="p">()</span>
+<span class="p">}</span></code></pre>
+
+<p>In the example above we have the simplest example of something which most of you would
+call <strong>inheritance</strong>. For now, let's say that <code>Woman</code> inherits from <code>Person</code>. The <code>Woman</code> type
+contains all the fields from <code>Person</code>, can override its functions, can do something like
+superclass calls. As I said, at a glance it may look like inheritance. Yeah... but it's
+just a trick!</p>
+
+<h3 id="Is+it?">Is it?</h3>
+
+<p>Let's take a closer look and let me explain how it works under the hood. First of all, there's no
+real inheritance here. It would be great if you could forget all you know about inheritance while
+you read this stuff... Snap!</p>
+
+<div class="meme">
+  <img src="/img/meme-mib-1.jpg" alt="Inheritance? What's inheritance?">
+</div>
+
+
+<p>Now, imagine struct as a box. Simple, gray, carton box... and imagine fields as <em>things</em>, some magic
+items you can put inside the box. Here's an example:</p>
+
+<pre><code class="language-go"><span class="k">type</span> <span class="n">SmallBox</span> <span class="k">struct</span> <span class="p">{</span>
+        <span class="n">BaseballCards</span>   <span class="p">[]</span><span class="nb">string</span>
+        <span class="n">BubbleGumsCount</span> <span class="nb">int</span>
+        <span class="n">AnyMagicItem</span>    <span class="n">bool</span>
+<span class="p">}</span></code></pre>
+
+<p>Yeah, that's how our small box may look like. But some day a small box may not be enough, huh?
+Or maybe you'd like to segregate your stuff. Then you can take a big box, and put small one
+together with other stuff inside, for example:</p>
+
+<pre><code class="language-go"><span class="k">type</span> <span class="n">BigBox</span> <span class="k">struct</span> <span class="p">{</span>
+        <span class="n">SmallBox</span>
+        <span class="n">Books</span> <span class="p">[]</span><span class="nb">string</span>
+        <span class="n">Toys</span>  <span class="p">[]</span><span class="nb">string</span>
+<span class="p">}</span></code></pre>
+
+<p>Splendid, we have a big box which contains all the stuff we have in the small one, plus
+some books and toys. And now the magic happens... we can ask:</p>
+
+<blockquote>
+  what's in the big box?
+</blockquote>
+
+
+<p>We can answer in a various ways. We can say quickly, that there are books, toys and some small
+box, or <strong>we can be more specific</strong> saying that there are toys, books, baseball cards and
+some magic items. Both answers will be correct, only on different detail level.
+Golang also allows you to specify that level of detail, eg.</p>
+
+<pre><code class="language-go"><span class="n">bigBox</span> <span class="p">:=</span> <span class="p">&amp;</span><span class="n">BigBox</span><span class="p">{}</span>
+<span class="n">bigBox</span><span class="p">.</span><span class="n">BubbleGumsCount</span> <span class="p">=</span> <span class="mi">4</span>          <span class="c1">// correct...</span>
+<span class="n">bigBox</span><span class="p">.</span><span class="n">SmallBox</span><span class="p">.</span><span class="n">AnyMagicItem</span> <span class="p">=</span> <span class="n">true</span> <span class="c1">// also correct</span></code></pre>
+
+<p>Speaking shortly, <code>BigBox</code> <strong>is not a kind of</strong> <code>SmallBox</code>, it just <strong>contains</strong> one <code>SmallBox</code>
+inside, and provides shorthands to <code>SmallBox</code> fields.</p>
+
+<h3 id="Overriding?">Overriding?</h3>
+
+<p>In the very first example you saw something like method overriding. Again, you have to forget
+about such a term. That magic thing was nothing more than calling a funciton of the
+box sitting inside, from the outer box, like here:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="p">(</span><span class="n">sb</span> <span class="p">*</span><span class="n">SmallBox</span><span class="p">)</span> <span class="n">Capacity</span><span class="p">()</span> <span class="nb">int</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="mi">20</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="p">(</span><span class="n">bb</span> <span class="p">*</span><span class="n">BigBox</span><span class="p">)</span> <span class="n">Capacity</span><span class="p">()</span> <span class="nb">int</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">bb</span><span class="p">.</span><span class="n">SmallBox</span><span class="p">.</span><span class="n">Capacity</span><span class="p">()</span> <span class="p">*</span> <span class="mi">3</span>
+<span class="p">}</span></code></pre>
+
+<p>We defined that a <code>BigBox</code> can store three times more items than the small one, but we're
+not overwriting the <code>SmallBox</code> function here. We can still access them both, obviously
+because they belong to different boxes.</p>
+
+<pre><code class="language-go"><span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="n">bigBox</span><span class="p">.</span><span class="n">Capacity</span><span class="p">())</span>          <span class="c1">// =&gt; 60</span>
+<span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="n">bigBox</span><span class="p">.</span><span class="n">SmallBox</span><span class="p">.</span><span class="n">Capacity</span><span class="p">())</span> <span class="c1">// =&gt; 20</span></code></pre>
+
+<p>However, unambigous functions may be called from outer box using shorthands:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="p">(</span><span class="n">sb</span> <span class="p">*</span><span class="n">SmallBox</span><span class="p">)</span> <span class="n">Color</span><span class="p">()</span> <span class="nb">string</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="s">"gray"</span>
+<span class="p">}</span>
+
+<span class="c1">// *snip*</span>
+
+<span class="n">bigBox</span><span class="p">.</span><span class="n">SmallBox</span><span class="p">.</span><span class="n">Color</span><span class="p">()</span> <span class="c1">// =&gt; "gray"</span>
+<span class="n">bigBox</span><span class="p">.</span><span class="n">Color</span><span class="p">()</span>          <span class="c1">// =&gt; "gray"</span></code></pre>
+
+<p>This is the killer feature which brings fresh breath of the inheritance into Go code.
+The <code>Color</code> in both calls refers to the same function bound to <code>SmallBox</code>.</p>
+
+<h3 id="Memory+skinflints!">Memory skinflints!</h3>
+
+<p>Golang in general is a system programming language, and allows us to manage memory
+up to some abstract point by using pointers. We can use it to save up some memory
+also by defining structs. We can assume that our <code>BigBox</code> may, or may not have
+a <code>SmallBox</code> inside. Until now we've been always keeping memory allocated for a small
+box, even though it was not used. We can do this little bit more efficient by embedding
+a pointer in our struct:</p>
+
+<pre><code class="language-go"><span class="k">type</span> <span class="n">SkinflintBigBox</span> <span class="k">struct</span> <span class="p">{</span>
+        <span class="p">*</span><span class="n">SmallBox</span>
+        <span class="n">Books</span> <span class="p">[]</span><span class="nb">string</span>
+        <span class="n">Toys</span>  <span class="p">[]</span><span class="nb">string</span>
+<span class="p">}</span></code></pre>
+
+<p>But there's one trick in here, this <strong>embedded structure acts the same manner as any
+other pointer</strong>, so first of all we have to remember to <strong>initialize it</strong>, otherwise
+a lot of bad things may happen:</p>
+
+<pre><code class="language-go"><span class="n">bigBox</span> <span class="p">:=</span> <span class="p">&amp;</span><span class="n">SkinflintBigBox</span><span class="p">{}</span>
+<span class="n">bigBox</span><span class="p">.</span><span class="n">SmallBox</span>     <span class="c1">// =&gt; nil</span>
+<span class="n">bigBox</span><span class="p">.</span><span class="n">AnyMagicItem</span> <span class="c1">// ...</span></code></pre>
+
+<div class="meme">
+  <img src="/img/meme-panic-1.gif" alt="Panic!">
+</div>
+
+
+<p>We have to initialize our small box the same way as any other pointer field:</p>
+
+<pre><code class="language-go"><span class="n">bigBox</span> <span class="p">:=</span> <span class="p">&amp;</span><span class="n">SkinflintBigBox</span><span class="p">{</span><span class="n">SmallBox</span><span class="p">:</span> <span class="p">&amp;</span><span class="n">SmallBox</span><span class="p">{</span><span class="n">AnyMagicItem</span><span class="p">:</span> <span class="n">true</span><span class="p">}}</span>
+<span class="n">bigBox</span><span class="p">.</span><span class="n">AnyMagicItem</span> <span class="c1">// =&gt; true</span></code></pre>
+
+<p>Yay! Everything works fine now! Also you may want to know that embedded pointer
+<strong>can be initialized at any time</strong>, it doesn't have to be done during the outer
+structure's initialization.</p>
+
+<h3 id="It's+not+magic,+it's+a+trick...">It's not magic, it's a trick...</h3>
+
+<p>Summarizing, there's no magic here. So called inheritance it's just a special
+kind of field which provides shorthands to its functions. Simple, clever and
+enough to say OOP fanboys:</p>
+
+<blockquote>
+  Sure, it's OOP... <strong>Go</strong> for it!
+</blockquote>
+
+
+
+
+<br><div class="meme">
+  <img src="/img/meme-ilied-1.jpg" alt="I lied!">
+</div>
+
+
+<p>That's all folks, I hope you like and it and prepare for more stuff soon,
+We have a lot to catch up with!</p>
+          </article>
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+              var disqus_shortname = 'areyoufuckingcodingme';
+              (function() {
+              var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+              dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+              (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+              })();
+          </script>
+          <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+          <a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a>
+        
+      </div>
+      <footer role="contentinfo">
+        Copyleft 2012 by <a href="http://www.nu7hat.ch/">nu7</a>, Some rights reserved. <br />
+        <small>
+          Follow me on <a href="http://twitter.com/nu7hatch">twitter</a> or see my projects
+          on <a href="http://github.com/nu7hatch">github</a>.<br />
+        </small>
+      </footer>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/js/libs/jquery-1.7.1.min.js"><\/script>')</script>
+    <script src='/js/plugins.js'></script>
+    <script>
+        //Google Analytics
+        var _gaq=[['_setAccount','UA-28812082-1'],['_trackPageview']];
+        (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+        g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+        s.parentNode.insertBefore(g,s)}(document,'script'));
+    </script>
+  </body>
+</html>
