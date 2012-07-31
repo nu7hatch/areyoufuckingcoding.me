@@ -113,7 +113,7 @@ inside, and provides shorthands to &lt;code&gt;SmallBox&lt;/code&gt; fields.&lt;
 &lt;h3 id="Overriding?"&gt;Overriding?&lt;/h3&gt;
 
 &lt;p&gt;In the very first example you saw something like method overriding. Again, you have to forget
-about such a term. That magic thing was nothing more than calling a funciton of the
+about such a term. That magic thing was nothing more than calling a function of the
 box sitting inside, from the outer box, like here:&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;sb&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
@@ -131,7 +131,7 @@ because they belong to different boxes.&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;          &lt;span class="c1"&gt;// =&amp;gt; 60&lt;/span&gt;
 &lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; 20&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;However, unambigous functions may be called from outer box using shorthands:&lt;/p&gt;
+&lt;p&gt;However, unambiguous functions may be called from outer box using shorthands:&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;sb&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Color&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
         &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s"&gt;"gray"&lt;/span&gt;

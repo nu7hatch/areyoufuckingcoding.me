@@ -9,6 +9,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="nanoc 3.2.4">
     <script src="js/libs/modernizr-2.0.6.min.js"></script>
+    <script>
+        //Google Analytics
+        var _gaq=[['_setAccount','UA-28812082-1'],['_trackPageview']];
+        (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+        g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+        s.parentNode.insertBefore(g,s)}(document,'script'));
+    </script>
   </head>
   <body>
     <div id="container">
@@ -130,7 +137,7 @@ inside, and provides shorthands to <code>SmallBox</code> fields.</p>
 <h3 id="Overriding?">Overriding?</h3>
 
 <p>In the very first example you saw something like method overriding. Again, you have to forget
-about such a term. That magic thing was nothing more than calling a funciton of the
+about such a term. That magic thing was nothing more than calling a function of the
 box sitting inside, from the outer box, like here:</p>
 
 <pre><code class="language-go"><span class="k">func</span> <span class="p">(</span><span class="n">sb</span> <span class="p">*</span><span class="n">SmallBox</span><span class="p">)</span> <span class="n">Capacity</span><span class="p">()</span> <span class="nb">int</span> <span class="p">{</span>
@@ -148,7 +155,7 @@ because they belong to different boxes.</p>
 <pre><code class="language-go"><span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="n">bigBox</span><span class="p">.</span><span class="n">Capacity</span><span class="p">())</span>          <span class="c1">// =&gt; 60</span>
 <span class="n">fmt</span><span class="p">.</span><span class="n">Println</span><span class="p">(</span><span class="n">bigBox</span><span class="p">.</span><span class="n">SmallBox</span><span class="p">.</span><span class="n">Capacity</span><span class="p">())</span> <span class="c1">// =&gt; 20</span></code></pre>
 
-<p>However, unambigous functions may be called from outer box using shorthands:</p>
+<p>However, unambiguous functions may be called from outer box using shorthands:</p>
 
 <pre><code class="language-go"><span class="k">func</span> <span class="p">(</span><span class="n">sb</span> <span class="p">*</span><span class="n">SmallBox</span><span class="p">)</span> <span class="n">Color</span><span class="p">()</span> <span class="nb">string</span> <span class="p">{</span>
         <span class="k">return</span> <span class="s">"gray"</span>
@@ -245,12 +252,5 @@ We have a lot to catch up with!</p>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
     <script>window.jQuery || document.write('<script src="/js/libs/jquery-1.7.1.min.js"><\/script>')</script>
     <script src='/js/plugins.js'></script>
-    <script>
-        //Google Analytics
-        var _gaq=[['_setAccount','UA-28812082-1'],['_trackPageview']];
-        (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
-        g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
-        s.parentNode.insertBefore(g,s)}(document,'script'));
-    </script>
   </body>
 </html>
