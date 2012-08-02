@@ -17,4 +17,5 @@ group :development do
   gem 'builder'
   gem 'yui-compressor'
   gem 'systemu'
+  gem 'foreman'
 end

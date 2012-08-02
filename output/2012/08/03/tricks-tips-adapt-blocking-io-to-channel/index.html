@@ -1,0 +1,160 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Are You Fuckign Coding Me!? - GoTip #1 - Adapt blocking IO to a channel</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css" media="screen">
+    <meta name="description" content="Distributed computing baby! Golang, Ruby, Linux and more!">
+    <meta name="author" content="Krzysztof Kowalik aka. nu7hatch">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="gkFdodtzp59LR90Na2j-sBnfUDoZ7oBQh0g6pE562vc" />
+    <script src="js/libs/modernizr-2.0.6.min.js"></script>
+    <script>
+        var _gaq=[['_setAccount','UA-28812082-1'],['_trackPageview']];
+        (function() {
+            var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+  </head>
+  <body>
+    <div id="container">
+      <header role="banner">
+        <h1>
+          <a href="/" id="logo">Are You Fucking Coding Me!?</a>
+        </h1>                                                
+        <div class="tagline">
+          <div class="in"><a href="http://www.nu7hat.ch/">by nu7</a></div>
+        </div>
+      </header>
+      <div id="main" role="main">
+        
+          <article class="fullpost" id="2012_8_3_gotip_1___adapt_blocking_io_to_a_channel">
+            <header>
+              <h2>GoTip #1 - Adapt blocking IO to a channel</h2>
+              <div class="info">
+                posted by <span class="fn">nu7</span> /
+                <time class="created_at" datetime="2012-08-03T00:00:00+02:00">
+                  August 3, 2012
+                </time><time >
+              </div>
+            </header>
+            <p>And here it is, my first of many short notes with gotricks and gotips. Today
+I'm going to describe a trick which allows to <strong>combine blocking IO
+reads together with Go channels</strong>.</p>
+
+<h3 id="The+problem">The problem</h3>
+
+<p>Let's take a look at this example:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="n">run</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">for</span> <span class="p">{</span>
+                <span class="k">select</span> <span class="p">{</span>
+                <span class="k">case</span> <span class="p">&lt;-</span><span class="n">stop</span><span class="p">:</span>
+                        <span class="k">return</span>
+                <span class="k">case</span> <span class="p">&lt;-</span><span class="n">time</span><span class="p">.</span><span class="n">After</span><span class="p">(</span><span class="mi">5</span> <span class="p">*</span> <span class="n">time</span><span class="p">.</span><span class="n">Second</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">_</span><span class="p">,</span> <span class="n">err</span> <span class="p">:=</span> <span class="n">conn</span><span class="p">.</span><span class="n">Write</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="s">"ping\n"</span><span class="p">));</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+                                <span class="k">return</span>
+                        <span class="p">}</span>
+                <span class="p">}</span>
+        <span class="p">}</span>
+<span class="p">}</span></code></pre>
+
+<p>Pretty simple, huh? We have a control function which either waits for
+notification on <code>stop</code> channel, or sends ping every 5 second. Now the problem
+is how to add reading from the connection to this statement. We can't just
+add it since <code>net.Conn.Read()</code> is <strong>blocking IO operation</strong>.</p>
+
+<h3 id="The+solution">The solution</h3>
+
+<p>The most neat solution for this problem is to write a <strong>generator function</strong>,
+which adapts IO reader to a channel. Generator <strong>pattern</strong> is a function
+which runs goroutine inside of it and returns a channel being a tie between
+current context and the goroutine.</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="n">listen</span><span class="p">()</span> <span class="p">&lt;-</span><span class="k">chan</span> <span class="p">[]</span><span class="nb">byte</span> <span class="p">{</span>
+        <span class="n">c</span> <span class="p">:=</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">)</span>
+        <span class="n">b</span> <span class="p">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">{}</span>
+
+        <span class="k">go</span> <span class="k">func</span><span class="p">()</span> <span class="p">{</span>            
+                <span class="k">for</span> <span class="p">{</span>
+                        <span class="k">if</span> <span class="n">_</span><span class="p">,</span> <span class="n">err</span> <span class="p">:=</span> <span class="n">conn</span><span class="p">.</span><span class="n">Read</span><span class="p">(</span><span class="n">b</span><span class="p">);</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">&amp;&amp;</span> <span class="n">err</span> <span class="p">==</span> <span class="n">io</span><span class="p">.</span><span class="n">EOF</span> <span class="p">{</span>
+                                <span class="n">c</span> <span class="p">&lt;-</span> <span class="n">nil</span>
+                        <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">err</span> <span class="p">==</span> <span class="n">nil</span> <span class="p">{</span>
+                                <span class="n">c</span> <span class="p">&lt;-</span> <span class="n">b</span>
+                        <span class="p">}</span>
+                 <span class="p">}</span>
+        <span class="p">}()</span>
+
+        <span class="k">return</span> <span class="n">c</span> 
+<span class="p">}</span></code></pre>
+
+<p>What are we doing here? The <code>listen</code> func above opens a channel - this is
+where the data read from the IO will be passed. From my previous notes you
+should know that in such situations <strong>it's good to return read only version of
+the channel</strong> to avoid quirks. Second thing <code>listen</code> does - it runs
+new goroutine with a loop, which reads from our IO and passes stuff
+forward to the channel. Note, that when connection meets
+<code>EOF</code> error, it passes <code>nil</code> there - we will use that value to exit
+from <code>run</code> when IO is closed. Of course this is very dummy example, in
+more sophisticated apps you can use a message strucst containing all the
+error information, data, etc. It's all up to you.</p>
+
+<p>Anyway, now we have to tie it up together with our <code>run</code> control func:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="n">run</span><span class="p">()</span> <span class="p">{</span>
+        <span class="n">read</span> <span class="p">:=</span> <span class="n">listen</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="p">{</span>
+                <span class="k">select</span> <span class="p">{</span>
+                <span class="k">case</span> <span class="p">&lt;-</span><span class="n">stop</span><span class="p">:</span>
+                        <span class="k">return</span>
+                <span class="k">case</span> <span class="n">b</span> <span class="p">:=</span> <span class="p">&lt;-</span><span class="n">read</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">b</span> <span class="p">==</span> <span class="n">nil</span> <span class="p">{</span>
+                                <span class="k">return</span>
+                        <span class="p">}</span>
+                        <span class="c1">// Do something with the data... </span>
+                <span class="k">case</span> <span class="p">&lt;-</span><span class="n">time</span><span class="p">.</span><span class="n">After</span><span class="p">(</span><span class="mi">5</span> <span class="p">*</span> <span class="n">time</span><span class="p">.</span><span class="n">Second</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">_</span><span class="p">,</span> <span class="n">err</span> <span class="p">:=</span> <span class="n">conn</span><span class="p">.</span><span class="n">Write</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="s">"ping\n"</span><span class="p">));</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+                                <span class="k">return</span>
+                        <span class="p">}</span>
+                <span class="p">}</span>
+        <span class="p">}</span>
+<span class="p">}</span></code></pre>
+
+<p>We simply get the <code>read</code> channel returned from <code>listen</code> and have to
+add a case for it to the <code>select</code> statement. According to what I said before
+about passing <code>nil</code> data on <code>EOF</code>, we just exiting when it happens.</p>
+
+<p>Oh, you may ask why passing <code>nil</code> around instead of sending something
+to <code>stop</code> channel. Good question, but we can't do this... I'm short on time
+now, so I'll explain it in next <strong>GoTips</strong> episode. Stay tuned!</p>
+          </article>
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+              var disqus_shortname = 'areyoufuckingcodingme';
+              (function() {
+              var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+              dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+              (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+              })();
+          </script>
+          <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+          <a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a>
+        
+      </div>
+      <footer role="contentinfo">
+        Copyleft 2012 by <a href="http://www.nu7hat.ch/">nu7</a>, Some rights reserved. <br />
+        <small>
+          Follow me on <a href="http://twitter.com/nu7hatch">twitter</a> or see my projects
+          on <a href="http://github.com/nu7hatch">github</a>.<br />
+        </small>
+      </footer>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/js/libs/jquery-1.7.1.min.js"><\/script>')</script>
+    <script src='/js/plugins.js'></script>
+  </body>
+</html>

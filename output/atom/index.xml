@@ -2,13 +2,110 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
   <id>http://areyoufuckingcoding.me/</id>
   <title>Are You Fucking Coding Me!?</title>
-  <updated>2012-07-24T22:00:00Z</updated>
+  <updated>2012-08-02T22:00:00Z</updated>
   <link rel="alternate" href="http://areyoufuckingcoding.me/"/>
   <link rel="self" href="http://feeds.feedburner.com/areyoufuckingcodingme"/>
   <author>
     <name>Krzysztof Kowalik</name>
     <uri>http://areyoufuckingcoding.me</uri>
   </author>
+  <entry>
+    <id>tag:areyoufuckingcoding.me,2012-08-03:/2012/08/03/tricks-tips-adapt-blocking-io-to-channel/</id>
+    <title type="html">GoTip #1 - Adapt blocking IO to a channel</title>
+    <published>2012-08-02T22:00:00Z</published>
+    <updated>2012-08-02T22:00:00Z</updated>
+    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/08/03/tricks-tips-adapt-blocking-io-to-channel/"/>
+    <content type="html">&lt;p&gt;And here it is, my first of many short notes with gotricks and gotips. Today
+I'm going to describe a trick which allows to &lt;strong&gt;combine blocking IO
+reads together with Go channels&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h3 id="The+problem"&gt;The problem&lt;/h3&gt;
+
+&lt;p&gt;Let's take a look at this example:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;run&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;select&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;stop&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                        &lt;span class="k"&gt;return&lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;time&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;After&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt; &lt;span class="n"&gt;time&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Second&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;conn&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Write&lt;/span&gt;&lt;span class="p"&gt;([]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"ping\n"&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="k"&gt;return&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Pretty simple, huh? We have a control function which either waits for
+notification on &lt;code&gt;stop&lt;/code&gt; channel, or sends ping every 5 second. Now the problem
+is how to add reading from the connection to this statement. We can't just
+add it since &lt;code&gt;net.Conn.Read()&lt;/code&gt; is &lt;strong&gt;blocking IO operation&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h3 id="The+solution"&gt;The solution&lt;/h3&gt;
+
+&lt;p&gt;The most neat solution for this problem is to write a &lt;strong&gt;generator function&lt;/strong&gt;,
+which adapts IO reader to a channel. Generator &lt;strong&gt;pattern&lt;/strong&gt; is a function
+which runs goroutine inside of it and returns a channel being a tie between
+current context and the goroutine.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;listen&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;make&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;
+
+        &lt;span class="k"&gt;go&lt;/span&gt; &lt;span class="k"&gt;func&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;            
+                &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;conn&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Read&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;==&lt;/span&gt; &lt;span class="n"&gt;io&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;EOF&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;==&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                 &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}()&lt;/span&gt;
+
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;c&lt;/span&gt; 
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;What are we doing here? The &lt;code&gt;listen&lt;/code&gt; func above opens a channel - this is
+where the data read from the IO will be passed. From my previous notes you
+should know that in such situations &lt;strong&gt;it's good to return read only version of
+the channel&lt;/strong&gt; to avoid quirks. Second thing &lt;code&gt;listen&lt;/code&gt; does - it runs
+new goroutine with a loop, which reads from our IO and passes stuff
+forward to the channel. Note, that when connection meets
+&lt;code&gt;EOF&lt;/code&gt; error, it passes &lt;code&gt;nil&lt;/code&gt; there - we will use that value to exit
+from &lt;code&gt;run&lt;/code&gt; when IO is closed. Of course this is very dummy example, in
+more sophisticated apps you can use a message strucst containing all the
+error information, data, etc. It's all up to you.&lt;/p&gt;
+
+&lt;p&gt;Anyway, now we have to tie it up together with our &lt;code&gt;run&lt;/code&gt; control func:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;run&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;read&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;listen&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;select&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;stop&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                        &lt;span class="k"&gt;return&lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="p"&gt;==&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="k"&gt;return&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                        &lt;span class="c1"&gt;// Do something with the data... &lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;time&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;After&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt; &lt;span class="n"&gt;time&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Second&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;conn&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Write&lt;/span&gt;&lt;span class="p"&gt;([]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"ping\n"&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="k"&gt;return&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We simply get the &lt;code&gt;read&lt;/code&gt; channel returned from &lt;code&gt;listen&lt;/code&gt; and have to
+add a case for it to the &lt;code&gt;select&lt;/code&gt; statement. According to what I said before
+about passing &lt;code&gt;nil&lt;/code&gt; data on &lt;code&gt;EOF&lt;/code&gt;, we just exiting when it happens.&lt;/p&gt;
+
+&lt;p&gt;Oh, you may ask why passing &lt;code&gt;nil&lt;/code&gt; around instead of sending something
+to &lt;code&gt;stop&lt;/code&gt; channel. Good question, but we can't do this... I'm short on time
+now, so I'll explain it in next &lt;strong&gt;GoTips&lt;/strong&gt; episode. Stay tuned!&lt;/p&gt;</content>
+  </entry>
   <entry>
     <id>tag:areyoufuckingcoding.me,2012-07-25:/2012/07/25/object-desoriented-language/</id>
     <title type="html">Object desoriented language</title>
@@ -1265,395 +1362,5 @@ powering them up with web-services or tools.&lt;/p&gt;
 
 &lt;p&gt;That's all for tonight, like always thanks to &lt;a href="http://twitter.com/poteland"&gt;PoTe&lt;/a&gt;
 for fixing my terrible english!&lt;/p&gt;</content>
-  </entry>
-  <entry>
-    <id>tag:areyoufuckingcoding.me,2012-02-14:/2012/02/14/the-go-tool/</id>
-    <title type="html">The go tool</title>
-    <published>2012-02-13T23:00:00Z</published>
-    <updated>2012-02-13T23:00:00Z</updated>
-    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/02/14/the-go-tool/"/>
-    <content type="html">&lt;p&gt;On the wave of the latest weekly release introducing &lt;strong&gt;new go command&lt;/strong&gt; I decided to write
-a little about it. I have to admit that when I heard about the idea of unified &lt;strong&gt;go&lt;/strong&gt; tool
-for the first time I was little bit skeptic and full of fears. I was worrying that it's gonna
-be fucked up like most of the other language-specific package managers. IMHO most of such
-package managers are reinventing the wheel and coliding with the operating system PMs which
-makes sysadmins' life much harder. What's more, I actually really liked makefiles, they were
-simple and straightforward, and just worked fine. Fortunetely, &lt;strong&gt;new go tool dispelled
-all my fears!&lt;/strong&gt;&lt;/p&gt;
-
-&lt;h3 id="Don't+repeat..."&gt;Don't repeat...&lt;/h3&gt;
-
-&lt;p&gt;Lot of information about new go tool shown up recently on the
-&lt;a href="http://groups.google.com/group/golang-nuts/browse_thread/thread/b4bb313b64b8ca84/4bc3cda688c04b57?lnk=gst&amp;amp;q=the+go+command#4bc3cda688c04b57"&gt;&lt;strong&gt;go nuts&lt;/strong&gt;&lt;/a&gt;
-mailing list. The official go documentation also includes now some short article about
-&lt;a href="http://weekly.golang.org/doc/code.html"&gt;&lt;strong&gt;how to write go code&lt;/strong&gt;&lt;/a&gt; using new go tool.&lt;/p&gt;
-
-&lt;p&gt;Anyway, I think there's still a gap in the docs at this point, so it makes reasonable to write
-fast introduction to new go tool and demonstrate some usefull tricks.&lt;/p&gt;
-
-&lt;h3 id="Convention+over+configuration"&gt;Convention over configuration&lt;/h3&gt;
-
-&lt;p&gt;That was a source of my biggest fears, mostly because of my experience with Ruby on Rails.
-All Rails-familiar developers shall agree with me that every time when you try to do
-something a little bit hacky, a little bit tricky, something which doesn't follow the
-rules, it's just...&lt;/p&gt;
-
-&lt;div class="meme"&gt;
-  &lt;img src="/img/meme-impossibru.jpg" alt="IMPOSSIBRU!"&gt;
-&lt;/div&gt;
-
-
-&lt;p&gt;But let's talk about good practices. First of all, each of the go tools does only one
-thing, and does it right. We have there i.a:&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;
-&lt;strong&gt;&lt;code&gt;go build&lt;/code&gt;&lt;/strong&gt; - to compile the package,&lt;/li&gt;
-&lt;li&gt;
-&lt;strong&gt;&lt;code&gt;go get&lt;/code&gt;&lt;/strong&gt; - to resolve and install the dependencies,&lt;/li&gt;
-&lt;li&gt;
-&lt;strong&gt;&lt;code&gt;go test&lt;/code&gt;&lt;/strong&gt; - to run test suites and benchmakrs,&lt;/li&gt;
-&lt;li&gt;
-&lt;strong&gt;&lt;code&gt;go install&lt;/code&gt;&lt;/strong&gt; - to install the package,&lt;/li&gt;
-&lt;li&gt;
-&lt;strong&gt;&lt;code&gt;go doc&lt;/code&gt;&lt;/strong&gt; - to generate documentation,&lt;/li&gt;
-&lt;li&gt;
-&lt;strong&gt;&lt;code&gt;go fmt&lt;/code&gt;&lt;/strong&gt; - to properly format your code,&lt;/li&gt;
-&lt;li&gt;
-&lt;strong&gt;&lt;code&gt;go run&lt;/code&gt;&lt;/strong&gt; - to build and run the apps,&lt;/li&gt;
-&lt;li&gt;
-&lt;strong&gt;&lt;code&gt;go tool&lt;/code&gt;&lt;/strong&gt; - to call extra tools,&lt;/li&gt;
-&lt;li&gt;etc...&lt;/li&gt;
-&lt;/ul&gt;&lt;p&gt;Go packages &lt;strong&gt;don't have any build configuration&lt;/strong&gt; at all. There's no makefiles, no
-descriptions of dependencies etc. How it works then? Everything is retrieved from the
-&lt;strong&gt;source code&lt;/strong&gt;. To let the magic happen one thing has to be done first. You need to
-specify where your go stuff will be located. The &lt;strong&gt;&lt;code&gt;GOPATH&lt;/code&gt;&lt;/strong&gt; environment variable defines
-paths to the go trees. For example, the following line in your &lt;code&gt;~/.bashrc&lt;/code&gt;:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-sh"&gt;&lt;span class="nv"&gt;GOPATH&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;"/home/nu7/gocode"&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;...tells the go tool that your go tree is located in the specified directory. But you
-may ask &lt;strong&gt;what the go tree actually is&lt;/strong&gt;? Speaking shortly, it's a place where &lt;strong&gt;all your
-go sources, packages and commands will be located&lt;/strong&gt;. Take a look:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ls /home/nu7/gocode/
-bin   pkg   src
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;All the sources will be located in the &lt;code&gt;src&lt;/code&gt; folder. By all the sources I mean both,
-your applications, packages and dependencies as well. The &lt;code&gt;pkg&lt;/code&gt; folder contains compiled
-and installed packages, and &lt;code&gt;bin&lt;/code&gt; installed commands.&lt;/p&gt;
-
-&lt;p&gt;The &lt;code&gt;GOPATH&lt;/code&gt; variable works very similar to &lt;code&gt;PATH&lt;/code&gt;, you can set as many go paths
-as you want. You have to only remember that first one is the main one, so all
-the stuff installed via &lt;code&gt;go install&lt;/code&gt; will go there.&lt;/p&gt;
-
-&lt;h3 id="Resolving+dependencies"&gt;Resolving dependencies&lt;/h3&gt;
-
-&lt;p&gt;There's no configuration files describing dependecies... so how the heck go tool may
-know what to install and from where to download it! You think there's some repository?
-Nope, there's not! Go introduces something called &lt;strong&gt;importpath&lt;/strong&gt;, take a look:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;import&lt;/span&gt; &lt;span class="s"&gt;"github.com/nu7hatch/gouuid"&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;The import path is 2 in 1. It's a repository URL and path to the location where the
-package has been installed locally. The &lt;strong&gt;&lt;code&gt;go get&lt;/code&gt;&lt;/strong&gt; tool just by looking at the import
-path knows from where to fetch the dependency, and &lt;strong&gt;&lt;code&gt;go build&lt;/code&gt;&lt;/strong&gt; knows from where to
-import them locally.&lt;/p&gt;
-
-&lt;p&gt;To &lt;strong&gt;install dependencies in your system&lt;/strong&gt;, you have to use &lt;code&gt;go get&lt;/code&gt; tool that way:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get package-name
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Wait, wait, wait... what's the package name here? It's the name of the package you
-want to install dependencies for. Assuming you have a package named &lt;code&gt;foo&lt;/code&gt; in your go
-sources, calling &lt;code&gt;go get foo&lt;/code&gt; will install all its dependencies. You can run the tool
-directly from the package as well:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cd ~/gocode/src/foo
-$ go get .
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;All other go tools works the same and can be called directly from the package or
-by specifying it's import path. It's also possible to &lt;strong&gt;execute a tool on the group
-of nested packages&lt;/strong&gt; using &lt;strong&gt;&lt;code&gt;...&lt;/code&gt;&lt;/strong&gt; (three dots) wildcard. If our &lt;code&gt;foo&lt;/code&gt; package contains
-some nested packages, dependecies for all of them can be installed at the same time just
-by calling:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get ./...  
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;If you already have specific dependency installed in your go tree, then &lt;strong&gt;it will be
-not updated&lt;/strong&gt; until you explicitly request that. To update packages while installing
-dependencies you need to run &lt;strong&gt;&lt;code&gt;go get&lt;/code&gt;&lt;/strong&gt; with &lt;strong&gt;&lt;code&gt;-u&lt;/code&gt;&lt;/strong&gt; flag:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get -u package-name
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Simple, isn't it?&lt;/p&gt;
-
-&lt;h3 id="The+dependency+hell!"&gt;The dependency hell!&lt;/h3&gt;
-
-&lt;p&gt;There's one more convention of the go tool I really like, but I'm afraid of at the
-same time... Go tool resolves dependencies by &lt;strong&gt;checking out HEAD version&lt;/strong&gt; of the
-repository. That forces package maintainers to &lt;a href="http://semver.org/"&gt;&lt;strong&gt;keep backward compatibility&lt;/strong&gt;&lt;/a&gt;
-and...&lt;/p&gt;
-
-&lt;div class="meme"&gt;
-  &lt;img src="/img/meme-jules-1.jpg" alt="GREEN MASTER MOTHERFUCKER! DO YOU HAVE IT?"&gt;
-&lt;/div&gt;
-
-
-&lt;p&gt;&lt;strong&gt;Green master policy&lt;/strong&gt; is something I was always insisting at my work. The default
-branch is something that people always check out at the beginning, so &lt;strong&gt;it shall be
-green&lt;/strong&gt;, or at least &lt;strong&gt;it have to work&lt;/strong&gt;! Once officially published, or once reaches
-maturity &lt;strong&gt;it should be backward compatible&lt;/strong&gt; as well - we can't deprecate things or
-change the API between the patch or minor versions.&lt;/p&gt;
-
-&lt;p&gt;But we all know how it looks like in practice. Lot of people don't give a shit about
-backward compatibility, they treat default branch as a playground, etc. For all those,
-and acually for all developers who want to live in peace with new go tool I have some
-set of rules...&lt;/p&gt;
-
-&lt;div class="important"&gt;
-  &lt;h4&gt;Rules you should follow in your fucking programmer's life:&lt;/h4&gt;
-  &lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Keep your fucking master green!&lt;/strong&gt;&lt;/li&gt;
-    &lt;li&gt;&lt;strong&gt;Work on fucking new feature in a fucking separate branch!&lt;/strong&gt;&lt;/li&gt;
-    &lt;li&gt;Once you published your code and someone is using it, &lt;strong&gt;don't fucking 
-    change the API!&lt;/strong&gt;
-&lt;/li&gt;
-    &lt;li&gt;If you want or need to change the API, &lt;strong&gt;change the fucking major 
-    version&lt;/strong&gt; and &lt;strong&gt;work on a fucking separate repository derived 
-    from the original one!&lt;/strong&gt;
-&lt;/li&gt;
-    &lt;li&gt;If you highly, &lt;strong&gt;very highly&lt;/strong&gt; need to use some particular tag, 
-    branch or commit as a dependency, &lt;strong&gt;use your fucking own fork of the repository 
-    pointed by default to the fucking commit you need!&lt;/strong&gt;
-&lt;/li&gt;
-    &lt;li&gt;Oh, and &lt;strong&gt;keep it simple&lt;/strong&gt;, motherfucker!&lt;/li&gt;
-  &lt;/ul&gt;
-&lt;/div&gt;
-
-
-&lt;p&gt;And don't make me recite the Ezechiel's book to make you remember that...&lt;/p&gt;
-
-&lt;h3 id="Building+and+installing"&gt;Building and installing&lt;/h3&gt;
-
-&lt;p&gt;Ok, let's go back to the go command. The &lt;code&gt;go build&lt;/code&gt; command is used to compile the
-package. It only builds the package, doesn't install it. What's also important,
-&lt;strong&gt;it requires the package to be checked out in the local source tree&lt;/strong&gt;. To install
-remote package you will use &lt;code&gt;go get&lt;/code&gt; instead:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get github.com/nu7hatch/gouuid
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;To install local package obviously &lt;code&gt;go install&lt;/code&gt; tool will be used. It builds the
-package first (if it's necessary) and then installs it under &lt;code&gt;$GOPATH/pkg&lt;/code&gt; or/and
-&lt;code&gt;$GOPATH/bin&lt;/code&gt;.&lt;/p&gt;
-
-&lt;p&gt;The go tool is also able to &lt;strong&gt;ignore files during the build&lt;/strong&gt;, obvioulsy without
-extra flags and special configuration. The only thing you have to do to ignore a file,
-is to prefix its name with underscore:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ls
-_bar.go   foo.go
-$ go build .
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;In the example above &lt;code&gt;_bar.go&lt;/code&gt; will be ignored during the build.&lt;/p&gt;
-
-&lt;p&gt;Hmm, and that's it... I think there's nothing more to say about it, let's move forward.&lt;/p&gt;
-
-&lt;h3 id="C+extensions+with+CGO"&gt;C extensions with CGO&lt;/h3&gt;
-
-&lt;p&gt;Go comes with really great support for &lt;strong&gt;building C extensions&lt;/strong&gt; with &lt;a href="http://http://weekly.golang.org/cmd/cgo/"&gt;cgo command&lt;/a&gt;.
-Actually, to build most of C-powered applications you don't even need to know about &lt;code&gt;cgo&lt;/code&gt;,
-the &lt;code&gt;go build&lt;/code&gt; tool is more than enough.&lt;/p&gt;
-
-&lt;p&gt;To be honest there's not too much to say about &lt;code&gt;cgo&lt;/code&gt;, while most of stuff is described
-clearly in the docs and in &lt;a href="http://code.google.com/p/go-wiki/wiki/cgo"&gt;&lt;strong&gt;article from the go users wiki&lt;/strong&gt;&lt;/a&gt;.&lt;/p&gt;
-
-&lt;p&gt;First thing I'd like to mention is something I really don't like, namely putting C
-source code within the comments as it is presented in most of the official examples.
-You have to know that those examples are presented that way mainly to minimize amount
-of code and show each example in a single file. In a real-life application &lt;strong&gt;C code
-shouldn't be placed in the comments block&lt;/strong&gt;! The &lt;code&gt;go build&lt;/code&gt; tool is smart enough to
-handle &lt;code&gt;.h&lt;/code&gt; and &lt;code&gt;.c&lt;/code&gt; files in your package.&lt;/p&gt;
-
-&lt;p&gt;Some example? Let's say we want to write simple &lt;code&gt;echo&lt;/code&gt; command which prints all
-arguments on the screen, but using the &lt;code&gt;printf&lt;/code&gt; function from &lt;code&gt;stdio.h&lt;/code&gt;. As it's
-mentioned on the wiki page, &lt;strong&gt;go doesn't allow to call C function with variable
-number of parameters&lt;/strong&gt;, so we have to write a small wrapper for the &lt;code&gt;printf&lt;/code&gt; function.
-Our code may look like this (also available &lt;a href="http://github.com/nu7hatch/cgoecho"&gt;on github&lt;/a&gt;):&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;echo.h&lt;/code&gt;:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-c"&gt;&lt;span class="cp"&gt;#ifndef _ECHO_H_&lt;/span&gt;
-&lt;span class="cp"&gt;#define _ECHO_H_&lt;/span&gt;
-
-&lt;span class="cp"&gt;#include &amp;lt;stdio.h&amp;gt;&lt;/span&gt;
-
-&lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="n"&gt;echo&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;char&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
-
-&lt;span class="cp"&gt;#endif &lt;/span&gt;&lt;span class="cm"&gt;/* _ECHO_H_ */&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;echo.c&lt;/code&gt;:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-c"&gt;&lt;span class="cp"&gt;#include "echo.h"&lt;/span&gt;
-
-&lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="nf"&gt;echo&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;char&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="p"&gt;{&lt;/span&gt;
-    &lt;span class="n"&gt;printf&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"%s&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s"&gt;"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;echo.go&lt;/code&gt;:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;package&lt;/span&gt; &lt;span class="n"&gt;main&lt;/span&gt;
-
-&lt;span class="cm"&gt;/*&lt;/span&gt;
-&lt;span class="cm"&gt;#include &amp;lt;stdlib.h&amp;gt;&lt;/span&gt;
-&lt;span class="cm"&gt;#include "echo.h"&lt;/span&gt;
-&lt;span class="cm"&gt;*/&lt;/span&gt;
-&lt;span class="k"&gt;import&lt;/span&gt; &lt;span class="s"&gt;"C"&lt;/span&gt;
-
-&lt;span class="k"&gt;import&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;
-        &lt;span class="s"&gt;"flag"&lt;/span&gt;
-        &lt;span class="s"&gt;"unsafe"&lt;/span&gt;
-        &lt;span class="s"&gt;"strings"&lt;/span&gt;
-&lt;span class="p"&gt;)&lt;/span&gt;
-
-&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;main&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-        &lt;span class="n"&gt;flag&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Parse&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
-        &lt;span class="n"&gt;cs&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;C&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;CString&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;strings&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;flag&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Args&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="s"&gt;" "&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
-        &lt;span class="n"&gt;C&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;echo&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;cs&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-        &lt;span class="n"&gt;C&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;free&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;unsafe&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Pointer&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;cs&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Now you can build all the things seamlessly with the &lt;code&gt;go build&lt;/code&gt; tool. It will
-recognize and compile all C files found in your package. Speaking shortly it
-just works!&lt;/p&gt;
-
-&lt;div class="meme"&gt;
-  &lt;img src="/img/meme-notbad-1.jpg" alt="NOT BAD"&gt;
-&lt;/div&gt;
-
-
-&lt;h3 id="Platform+specific+builds"&gt;Platform specific builds&lt;/h3&gt;
-
-&lt;p&gt;Another cool and interesting thing is that &lt;code&gt;go build&lt;/code&gt; can handle compilation of
-platform specific files. It recognizes such files by its names (it has to be like
-&lt;code&gt;file_GOOS_GOARCH.go&lt;/code&gt; or &lt;code&gt;file_GOARCH.go&lt;/code&gt;):&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;foo_darwin_amd64.go
-foo_386.go
-foo.go
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;This feature works with C files as well:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;foo_amd64.c
-foo_386.c
-foo.h
-foo.go
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;As they say in the docs, you may never need that features, but I wanted to mention
-it to give you a picture of how flexible the go tool is despite its simplicity.&lt;/p&gt;
-
-&lt;p&gt;Ok, but some of you may ask, what if there's a need to do some tricky thing which
-requires weird compiler flags or some configuration, etc...&lt;/p&gt;
-
-&lt;h3 id="Makefile+to+the+rescue!"&gt;Makefile to the rescue!&lt;/h3&gt;
-
-&lt;p&gt;Yes, don't be afraid of using makefiles! It's the easiest and quite convenient
-way to deal with extra configuration, some prerequisites etc. Makefiles can
-be helpful not only in C extensions but in multi-package applications as well
-(eg. in &lt;a href="http://github.com/webrocket/webrocket"&gt;webrocket&lt;/a&gt; we're using a top
-level  makefile to make our life easier).&lt;/p&gt;
-
-&lt;p&gt;More explicit example... Imagine an application which contains a core package and
-a command line tool based on it. We can stick to the echo example, but in more
-modular way:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;echo/
-  pkg/
-    echo/
-      echo.c
-      echo.h
-      echo.go
-  cmd/
-    echo/
-      echo.go
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;We want the &lt;code&gt;pkg/echo&lt;/code&gt; package to provide a reusable wrapper for C &lt;code&gt;printf&lt;/code&gt; function,
-and its source looks almost the same as in previous example. The &lt;code&gt;cmd/echo&lt;/code&gt; command
-is going to be an executable which is using the core package to display things on the
-screen. The &lt;code&gt;cmd/echo&lt;/code&gt; command may look like this:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;package&lt;/span&gt; &lt;span class="n"&gt;main&lt;/span&gt;
-
-&lt;span class="k"&gt;import&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;
-        &lt;span class="s"&gt;"github.com/nu7hatch/cgoecho2/pkg/echo"&lt;/span&gt;
-        &lt;span class="s"&gt;"flag"&lt;/span&gt;
-&lt;span class="p"&gt;)&lt;/span&gt;
-
-&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;main&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
-        &lt;span class="n"&gt;flag&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Parse&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
-        &lt;span class="n"&gt;echo&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Echo&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;flag&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Args&lt;/span&gt;&lt;span class="p"&gt;()...)&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; For those who don't know what &lt;code&gt;slice...&lt;/code&gt; means, it just maps a slice to
-variable number of arguments, something like &lt;code&gt;*args&lt;/code&gt; in Ruby.&lt;/p&gt;
-
-&lt;p&gt;Going back, to simplyfy our work with the package we need some &lt;code&gt;Makefile&lt;/code&gt;. It may look
-like this:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code class="language-make"&gt;&lt;span class="nf"&gt;all&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="m"&gt;echo-pkg echo-cmd&lt;/span&gt;
-
-&lt;span class="nf"&gt;echo-pkg&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;
-    go build ./pkg/echo
-
-&lt;span class="nf"&gt;echo-cmd&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;
-    go build ./cmd/echo&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Now we are able to quickly compile both, package and command just by calling &lt;strong&gt;&lt;code&gt;make&lt;/code&gt;&lt;/strong&gt;,
-and what's more important, &lt;strong&gt;we can still use the go command to install it remotely&lt;/strong&gt;:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get github.com/nu7hatch/cgoecho2/cmd/echo
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Of course this is very simple example, we can use the wildcard call to build all the stuff
-quicky and with no fuss:&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go build ./...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;But dealing with bigger applications, containing many packages and/or commands may
-be tricky. Then &lt;strong&gt;it's very reasonable&lt;/strong&gt; to use makefiles, shell scripts or any other
-build tool you like.&lt;/p&gt;
-
-&lt;h3 id="Summary"&gt;Summary&lt;/h3&gt;
-
-&lt;p&gt;I have to say it clearly, &lt;strong&gt;I fucking love new go tool&lt;/strong&gt;! I encountered bunch of problems
-while playing with it for the first time, but most of the issues was caused by some bad
-habits I've gained while using other package mangers/tools. Hah, recently I asked a lot
-of stupid question on the go-nuts IRC channel and the answers I get were ridiculously
-obvious and simple...&lt;/p&gt;
-
-&lt;p&gt;Now looking through my shoulder at all the tools I was using before, like &lt;code&gt;easy_install&lt;/code&gt;,
-&lt;code&gt;rubygems&lt;/code&gt; or &lt;code&gt;bundler&lt;/code&gt;, I have only one picture of them in my mind... Oh, I'll better
-not publish it because more people may hate me :). Instead, I can show you how do I
-see the new go tool...&lt;/p&gt;
-
-&lt;div class="meme"&gt;
-  &lt;img src="/img/meme-superman-1.jpg" alt="..."&gt;
-&lt;/div&gt;
-
-
-&lt;p&gt;I'm very happy to see Go going in a good direction! That's all for today, take care
-Gophers!&lt;/p&gt;</content>
   </entry>
 </feed>

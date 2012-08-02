@@ -12,6 +12,8 @@ GEM
     cri (2.2.1)
     daemons (1.1.8)
     eventmachine (0.12.10)
+    foreman (0.53.0)
+      thor (>= 0.13.6)
     fssm (0.2.9)
     mime-types (1.18)
     nanoc (3.3.3)
@@ -26,6 +28,7 @@ GEM
       daemons (>= 1.0.9)
       eventmachine (>= 0.12.6)
       rack (>= 1.0.0)
+    thor (0.15.4)
     yui-compressor (0.9.6)
       POpen4 (>= 0.1.4)
 
@@ -37,6 +40,7 @@ DEPENDENCIES
   builder
   coderay
   cri
+  foreman
   fssm
   mime-types
   nanoc
