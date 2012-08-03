@@ -1,0 +1,1370 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>http://areyoufuckingcoding.me/</id>
+  <title>Are You Fucking Coding Me!?</title>
+  <updated>2012-08-02T22:00:00Z</updated>
+  <link rel="alternate" href="http://areyoufuckingcoding.me/"/>
+  <link rel="self" href="http://feeds.feedburner.com/areyoufuckingcodingme"/>
+  <author>
+    <name>Krzysztof Kowalik</name>
+    <uri>http://areyoufuckingcoding.me</uri>
+  </author>
+  <entry>
+    <id>tag:areyoufuckingcoding.me,2012-08-03:/2012/08/03/tricks-tips-adapt-blocking-io-to-channel/</id>
+    <title type="html">GoTip #1 - Adapt blocking IO to a channel</title>
+    <published>2012-08-02T22:00:00Z</published>
+    <updated>2012-08-02T22:00:00Z</updated>
+    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/08/03/tricks-tips-adapt-blocking-io-to-channel/"/>
+    <content type="html">&lt;p&gt;And here it is, my first of many short notes with gotricks and gotips. Today
+I'm going to describe a trick which allows to &lt;strong&gt;combine blocking IO
+reads together with Go channels&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h3 id="The+problem"&gt;The problem&lt;/h3&gt;
+
+&lt;p&gt;Let's take a look at this example:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;run&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;select&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;stop&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                        &lt;span class="k"&gt;return&lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;time&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;After&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt; &lt;span class="n"&gt;time&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Second&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;conn&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Write&lt;/span&gt;&lt;span class="p"&gt;([]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"ping\n"&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="k"&gt;return&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Pretty simple, huh? We have a control function which either waits for
+notification on &lt;code&gt;stop&lt;/code&gt; channel, or sends ping every 5 second. Now the problem
+is how to add reading from the connection to this statement. We can't just
+add it since &lt;code&gt;net.Conn.Read()&lt;/code&gt; is &lt;strong&gt;blocking IO operation&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h3 id="The+solution"&gt;The solution&lt;/h3&gt;
+
+&lt;p&gt;The most neat solution for this problem is to write a &lt;strong&gt;generator function&lt;/strong&gt;,
+which adapts IO reader to a channel. Generator &lt;strong&gt;pattern&lt;/strong&gt; is a function
+which runs goroutine inside of it and returns a channel being a tie between
+current context and the goroutine.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;listen&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;make&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;chan&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="k"&gt;go&lt;/span&gt; &lt;span class="k"&gt;func&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;make&lt;/span&gt;&lt;span class="p"&gt;([]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1024&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+                &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                        &lt;span class="n"&gt;n&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;conn&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Read&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;n&lt;/span&gt; &lt;span class="p"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;[:&lt;/span&gt;&lt;span class="n"&gt;n&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt;
+                                &lt;span class="k"&gt;break&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                 &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}()&lt;/span&gt;
+
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;c&lt;/span&gt; 
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;What are we doing here? The &lt;code&gt;listen&lt;/code&gt; func above opens a channel - this is
+where the data read from the IO will be passed. From my previous notes you
+should know that in such situations &lt;strong&gt;it's good to return read only version of
+the channel&lt;/strong&gt; to avoid quirks. Second thing &lt;code&gt;listen&lt;/code&gt; does - it runs
+new goroutine with a loop, which reads from our IO and passes stuff
+forward to the channel. Note, that when connection meets
+&lt;code&gt;EOF&lt;/code&gt; error, it passes &lt;code&gt;nil&lt;/code&gt; there - we will use that value to exit
+from &lt;code&gt;run&lt;/code&gt; when IO is closed. Of course this is very dummy example, in
+more sophisticated apps you can use a message strucst containing all the
+error information, data, etc. It's all up to you.&lt;/p&gt;
+
+&lt;p&gt;Anyway, now we have to tie it up together with our &lt;code&gt;run&lt;/code&gt; control func:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;run&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;read&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;listen&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;select&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;stop&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                        &lt;span class="k"&gt;return&lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt; &lt;span class="p"&gt;==&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="k"&gt;return&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                        &lt;span class="c1"&gt;// Do something with the data... &lt;/span&gt;
+                &lt;span class="k"&gt;case&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;-&lt;/span&gt;&lt;span class="n"&gt;time&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;After&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt; &lt;span class="n"&gt;time&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Second&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+                        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;conn&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Write&lt;/span&gt;&lt;span class="p"&gt;([]&lt;/span&gt;&lt;span class="nb"&gt;byte&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"ping\n"&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                                &lt;span class="k"&gt;return&lt;/span&gt;
+                        &lt;span class="p"&gt;}&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We simply get the &lt;code&gt;read&lt;/code&gt; channel returned from &lt;code&gt;listen&lt;/code&gt; and have to
+add a case for it to the &lt;code&gt;select&lt;/code&gt; statement. According to what I said before
+about passing &lt;code&gt;nil&lt;/code&gt; data on &lt;code&gt;EOF&lt;/code&gt;, we just exiting when it happens.&lt;/p&gt;
+
+&lt;p&gt;Oh, you may ask why passing &lt;code&gt;nil&lt;/code&gt; around instead of sending something
+to &lt;code&gt;stop&lt;/code&gt; channel. Good question, but we can't do this... I'm short on time
+now, so I'll explain it in next &lt;strong&gt;GoTips&lt;/strong&gt; episode. Stay tuned!&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <id>tag:areyoufuckingcoding.me,2012-07-25:/2012/07/25/object-desoriented-language/</id>
+    <title type="html">Object desoriented language</title>
+    <published>2012-07-24T22:00:00Z</published>
+    <updated>2012-07-24T22:00:00Z</updated>
+    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/07/25/object-desoriented-language/"/>
+    <content type="html">&lt;p&gt;Ugh, finally I have spare time back to write something here. I hope you missed me?
+This time it will be a short note, which is gonna explain the question I hear
+every time when I talk about Go, namely:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;strong&gt;is golang object oriented language?&lt;/strong&gt;
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;To be honest I'm sick of hearing that question over and over. My plan is
+to describe this stuff here, print the URL out on a business card and give it
+away every time when some OOP fans will ask me about it.&lt;/p&gt;
+
+&lt;h3 id="Structs+at+a+glance"&gt;Structs at a glance&lt;/h3&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-magic-1.jpg" alt="Magic!"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;Speaking shortly, there is no strict answer to our holy question. Golang structs at
+a glance can act like objects and may seem to provide inheritance model, eg.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;Person&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;Name&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;p&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;Person&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Intro&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Name&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;Woman&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;Person&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;Woman&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Intro&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s"&gt;"Mrs. "&lt;/span&gt; &lt;span class="p"&gt;+&lt;/span&gt; &lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Person&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Intro&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;In the example above we have the simplest example of something which most of you would
+call &lt;strong&gt;inheritance&lt;/strong&gt;. For now, let's say that &lt;code&gt;Woman&lt;/code&gt; inherits from &lt;code&gt;Person&lt;/code&gt;. The &lt;code&gt;Woman&lt;/code&gt; type
+contains all the fields from &lt;code&gt;Person&lt;/code&gt;, can override its functions, can do something like
+superclass calls. As I said, at a glance it may look like inheritance. Yeah... but it's
+just a trick!&lt;/p&gt;
+
+&lt;h3 id="Is+it?"&gt;Is it?&lt;/h3&gt;
+
+&lt;p&gt;Let's take a closer look and let me explain how it works under the hood. First of all, there's no
+real inheritance here. It would be great if you could forget all you know about inheritance while
+you read this stuff... Snap!&lt;/p&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-mib-1.jpg" alt="Inheritance? What's inheritance?"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;Now, imagine struct as a box. Simple, gray, carton box... and imagine fields as &lt;em&gt;things&lt;/em&gt;, some magic
+items you can put inside the box. Here's an example:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;SmallBox&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;BaseballCards&lt;/span&gt;   &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+        &lt;span class="n"&gt;BubbleGumsCount&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt;
+        &lt;span class="n"&gt;AnyMagicItem&lt;/span&gt;    &lt;span class="n"&gt;bool&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Yeah, that's how our small box may look like. But some day a small box may not be enough, huh?
+Or maybe you'd like to segregate your stuff. Then you can take a big box, and put small one
+together with other stuff inside, for example:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;BigBox&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;SmallBox&lt;/span&gt;
+        &lt;span class="n"&gt;Books&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+        &lt;span class="n"&gt;Toys&lt;/span&gt;  &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Splendid, we have a big box which contains all the stuff we have in the small one, plus
+some books and toys. And now the magic happens... we can ask:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  what's in the big box?
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;We can answer in a various ways. We can say quickly, that there are books, toys and some small
+box, or &lt;strong&gt;we can be more specific&lt;/strong&gt; saying that there are toys, books, baseball cards and
+some magic items. Both answers will be correct, only on different detail level.
+Golang also allows you to specify that level of detail, eg.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;BigBox&lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;BubbleGumsCount&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;          &lt;span class="c1"&gt;// correct...&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;AnyMagicItem&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;true&lt;/span&gt; &lt;span class="c1"&gt;// also correct&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Speaking shortly, &lt;code&gt;BigBox&lt;/code&gt; &lt;strong&gt;is not a kind of&lt;/strong&gt; &lt;code&gt;SmallBox&lt;/code&gt;, it just &lt;strong&gt;contains&lt;/strong&gt; one &lt;code&gt;SmallBox&lt;/code&gt;
+inside, and provides shorthands to &lt;code&gt;SmallBox&lt;/code&gt; fields.&lt;/p&gt;
+
+&lt;h3 id="Overriding?"&gt;Overriding?&lt;/h3&gt;
+
+&lt;p&gt;In the very first example you saw something like method overriding. Again, you have to forget
+about such a term. That magic thing was nothing more than calling a function of the
+box sitting inside, from the outer box, like here:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;sb&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="mi"&gt;20&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bb&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;BigBox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;bb&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We defined that a &lt;code&gt;BigBox&lt;/code&gt; can store three times more items than the small one, but we're
+not overwriting the &lt;code&gt;SmallBox&lt;/code&gt; function here. We can still access them both, obviously
+because they belong to different boxes.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;          &lt;span class="c1"&gt;// =&amp;gt; 60&lt;/span&gt;
+&lt;span class="n"&gt;fmt&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Println&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Capacity&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; 20&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;However, unambiguous functions may be called from outer box using shorthands:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;sb&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;Color&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s"&gt;"gray"&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="c1"&gt;// *snip*&lt;/span&gt;
+
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Color&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; "gray"&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Color&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;          &lt;span class="c1"&gt;// =&amp;gt; "gray"&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;This is the killer feature which brings fresh breath of the inheritance into Go code.
+The &lt;code&gt;Color&lt;/code&gt; in both calls refers to the same function bound to &lt;code&gt;SmallBox&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h3 id="Memory+skinflints!"&gt;Memory skinflints!&lt;/h3&gt;
+
+&lt;p&gt;Golang in general is a system programming language, and allows us to manage memory
+up to some abstract point by using pointers. We can use it to save up some memory
+also by defining structs. We can assume that our &lt;code&gt;BigBox&lt;/code&gt; may, or may not have
+a &lt;code&gt;SmallBox&lt;/code&gt; inside. Until now we've been always keeping memory allocated for a small
+box, even though it was not used. We can do this little bit more efficient by embedding
+a pointer in our struct:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;SkinflintBigBox&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;
+        &lt;span class="n"&gt;Books&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+        &lt;span class="n"&gt;Toys&lt;/span&gt;  &lt;span class="p"&gt;[]&lt;/span&gt;&lt;span class="nb"&gt;string&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;But there's one trick in here, this &lt;strong&gt;embedded structure acts the same manner as any
+other pointer&lt;/strong&gt;, so first of all we have to remember to &lt;strong&gt;initialize it&lt;/strong&gt;, otherwise
+a lot of bad things may happen:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;SkinflintBigBox&lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;     &lt;span class="c1"&gt;// =&amp;gt; nil&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;AnyMagicItem&lt;/span&gt; &lt;span class="c1"&gt;// ...&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-panic-1.gif" alt="Panic!"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;We have to initialize our small box the same way as any other pointer field:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;bigBox&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;SkinflintBigBox&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;SmallBox&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="n"&gt;AnyMagicItem&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;true&lt;/span&gt;&lt;span class="p"&gt;}}&lt;/span&gt;
+&lt;span class="n"&gt;bigBox&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;AnyMagicItem&lt;/span&gt; &lt;span class="c1"&gt;// =&amp;gt; true&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Yay! Everything works fine now! Also you may want to know that embedded pointer
+&lt;strong&gt;can be initialized at any time&lt;/strong&gt;, it doesn't have to be done during the outer
+structure's initialization.&lt;/p&gt;
+
+&lt;h3 id="It's+not+magic,+it's+a+trick..."&gt;It's not magic, it's a trick...&lt;/h3&gt;
+
+&lt;p&gt;Summarizing, there's no magic here. So called inheritance it's just a special
+kind of field which provides shorthands to its functions. Simple, clever and
+enough to say OOP fanboys:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  Sure, it's OOP... &lt;strong&gt;Go&lt;/strong&gt; for it!
+&lt;/blockquote&gt;
+
+
+
+
+&lt;br&gt;&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-ilied-1.jpg" alt="I lied!"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;That's all folks, I hope you like and it and prepare for more stuff soon,
+We have a lot to catch up with!&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <id>tag:areyoufuckingcoding.me,2012-04-16:/2012/04/16/dpendency-hell/</id>
+    <title type="html">Dependency Hell</title>
+    <published>2012-04-15T22:00:00Z</published>
+    <updated>2012-04-15T22:00:00Z</updated>
+    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/04/16/dpendency-hell/"/>
+    <content type="html">&lt;p&gt;The recent wave of hate about Go's dependencies management and subsequent wave of ideas on
+how to "fix" it, i.a. &lt;a href="https://github.com/kr/goven"&gt;goven by Keith Rarick&lt;/a&gt; and
+&lt;a href="http://groups.google.com/group/golang-nuts/browse_thread/thread/d1abee8965114909/b48d73c43943b9bc"&gt;this thread&lt;/a&gt;
+on the go-nuts mailing list pushed me to some thoughts. In this post we
+will take a closer look at the &lt;em&gt;problem&lt;/em&gt; so many people found in Go
+and possible solutions for it.&lt;/p&gt;
+
+&lt;h3 id="The+problem(?)"&gt;The problem(?)&lt;/h3&gt;
+
+&lt;p&gt;First of all... what's the problem? That evil thing, shouted loudly by
+everyone is that the current way of dependency management does &lt;strong&gt;not protect&lt;/strong&gt;
+them against bugs and changes in external packages. Some external
+dependency may change and break our code in the future or break our
+production environment!&lt;/p&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-omg.jpg" alt="OMG"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;Hmm, is that actually the problem? IMHO that's not the real problem but
+just the effect of another, separate problem. Namely: misunderstanding of versioning
+and dependencies recognition. So, let's clarify some things, and
+let's do it from very very beginning...&lt;/p&gt;
+
+&lt;p&gt;So, what's &lt;strong&gt;software versioning&lt;/strong&gt;? Or more explicitly, why do we need
+software versioning? Speaking shortly, &lt;strong&gt;software versioning is the way
+to distinguish changes in the code&lt;/strong&gt;. The main job of versioning is to
+tell developers what has changed between the different versions. It also
+serves users by telling them  whether their software is stable or not, or to
+make the bug reporting process easier and more accurate.&lt;/p&gt;
+
+&lt;p&gt;Now, what's the &lt;strong&gt;dependency&lt;/strong&gt;? Dependency my friends is &lt;strong&gt;someone elses's
+piece of crap without which your piece of crap doesn't work&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h3 id="Versioning+vs.+dependencies+resolving"&gt;Versioning vs. dependencies resolving&lt;/h3&gt;
+
+&lt;p&gt;Now, some homework for you guys... Find a reasonable relationship between
+software versioning and dependencies resolving.&lt;/p&gt;
+
+&lt;p&gt;Speaking for myself, I found none. Because there are no relationships
+between them. Software versioning and dependencies resolving are totally
+different things. Now I can already hear you guys screaming:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  So how can I specify on which version of the software my code depends?
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;And here we are: &lt;strong&gt;You don't have to know that&lt;/strong&gt;! Let me put it
+this way: your code depends on packages &lt;em&gt;X&lt;/em&gt; and &lt;em&gt;Y&lt;/em&gt;. Now, package
+&lt;em&gt;Y&lt;/em&gt; also depends on package &lt;em&gt;X&lt;/em&gt;. If you make both dependencies
+fixed on an explicit version (or range of versions) then you may cause
+&lt;strong&gt;dependency hell&lt;/strong&gt; between those packages or get blocked in
+the future. For example you may not be able update &lt;em&gt;Y&lt;/em&gt; without
+updating &lt;em&gt;X&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Once again, this is not the problem, only a side effect of using versions
+in deps resolving. Of course, instead of eliminating the source of the
+problem many people try to make the effect less painful - like the
+Bundler gem in ruby or some super smart package managers. &lt;strong&gt;But you don't
+need that&lt;/strong&gt;. In case of dependency management you &lt;strong&gt;should depend
+on the major version exclsively&lt;/strong&gt; - moreover, you should consider
+different major versions as &lt;strong&gt;different packages&lt;/strong&gt; (eg. &lt;em&gt;foo-1.0&lt;/em&gt;
+and &lt;em&gt;foo-2.0&lt;/em&gt; should be treated as different package with no relation
+whatsoever between them, more explicitly &lt;em&gt;foo1&lt;/em&gt; != &lt;em&gt;foo2&lt;/em&gt;).&lt;/p&gt;
+
+&lt;p&gt;There's also very important thing all the maintainers should know:
+&lt;strong&gt;There should be no API changes between minor version changes and patch releases, motherfuckers!&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-bugs-1.jpg" alt="Bugs, bugs, buuugs!"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;Yeah, but even if you follow the rules and you don't change the API
+between minor versions other problems or bugs might still pop up,
+nobody's perfect. What then?&lt;/p&gt;
+
+&lt;p&gt;The simplest solution is to just downgrade the package to the first
+working version and report the bug, including infromation like from which
+version you have being forced to downgrad and which one solved the problem.
+&lt;strong&gt;This is the moment when versioning is usefull&lt;/strong&gt;. This is also how
+software improves and gets rid of bugs :P.&lt;/p&gt;
+
+&lt;p&gt;Anyway, now we're finally comming back to the big &lt;em&gt;"problem"&lt;/em&gt; that everybody seems to be whining about...&lt;/p&gt;
+
+&lt;h3 id="I+can't+deploy+shit!"&gt;I can't deploy shit!&lt;/h3&gt;
+
+&lt;p&gt;Now, again, I can just hear a bunch of pepole screaming:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  Are you fucking insane? I want to do a one click deploy without dealing
+  with packages on the production server.
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;It's reasonable that you want to make deploys fast and safe. But why do you
+want to deal with those packages anyway? There's one thing I can't
+understand at all: why the hell do you treat dependencies as a separate part of
+the software!? If you work on production-ready applications, you should
+not care about dependency management. Without this external piece of
+crap your crap doesn't work... more explicitly: this external crap
+is part of your crap now. Instead of specifying a bunch of fixed dependencies
+in a text file or complaining about the dependecy management in Go
+just add this external stuff to your repository and &lt;strong&gt;keep it together&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;Having all the dependencies versioned in your project's repository
+relieves you from having to care about the installation of dependencies in the production
+environment - &lt;strong&gt;because you're deploying the whole env&lt;/strong&gt;. You also have
+full flexibility to deal with the upgrading and downgrading of those
+dependencies. If you use &lt;code&gt;git&lt;/code&gt; then you can use &lt;strong&gt;submodules&lt;/strong&gt;. If the
+dependencies are versioned with &lt;code&gt;hg&lt;/code&gt; then you can keep mercurial information
+there and have access to the repo. You can also apply &lt;strong&gt;monkey patches
+or bugfixes directly in your environment&lt;/strong&gt;. Finally, you can keep
+&lt;strong&gt;different versions of the packages for different projects&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h3 id="Go+approach"&gt;Go approach&lt;/h3&gt;
+
+&lt;p&gt;I hope that after the following examples the approach that spawned so many
+controversies will finally be considered as a great feature, not a
+problem. For those who don't know how it works: Go's import path is
+3 in one - it shows from where to download the external package, where to install
+it and later load it from at compile time, and what import name you should
+use in your code:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;import&lt;/span&gt; &lt;span class="s"&gt;"github.com/nu7hatch/gouuid"&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The convention is simple to implement and really powerful, but needs a
+pivot in your programmer's mindset. I also agree that it requires a few
+tweaks to make it work in a handy way.&lt;/p&gt;
+
+&lt;h3 id="Tweaking!"&gt;Tweaking!&lt;/h3&gt;
+
+&lt;p&gt;To make it work as expected first we should describe exactly what we
+want to achieve. I want to tweak the Go tool in a way which will meet the
+following requirements:&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;I don't want to change the code I wrote so far (no difference in import paths).&lt;/li&gt;
+&lt;li&gt;I want to keep tracking dependencies (be able to update/downgrade versions).&lt;/li&gt;
+&lt;li&gt;I want to be able to monkey patch or bugfix directly into the package.&lt;/li&gt;
+&lt;li&gt;I want to deploy code safely with a single command (safely = with the same effect
+in production as in development).&lt;/li&gt;
+&lt;li&gt;I want to set a project up on a different machine with one command
+(eg. to bootstrap another copy for some other developer).&lt;/li&gt;
+&lt;li&gt;Deployment should not be dependent on any external resources or repositories.&lt;/li&gt;
+&lt;/ol&gt;&lt;p&gt;The first point is obvious so we'll just skip it. The second one - I want to track
+dependencies, which means I don't want to vendor them like &lt;code&gt;goven&lt;/code&gt;
+does. Point three affects the previous one as well - I want to keep track
+of the external package and at the same time I want to be able to fix
+it or change it. The remaining points are also obvious - we want to deploy or
+setup our project as fast as possible - preferably with one command.&lt;/p&gt;
+
+&lt;p&gt;How do we implement something like this in real life? The first thing that came to
+my mind was the &lt;code&gt;GOPATH&lt;/code&gt; behaviour. I didn't feel like it is really needed and I
+had right, it's not needed at all. Instead of specifying &lt;code&gt;GOPATH&lt;/code&gt; or dealing with
+it for different environments we can just add something unique which will allow
+&lt;code&gt;go&lt;/code&gt; tool to say &lt;em&gt;woot! we're under gopath, let's use local stuff now!&lt;/em&gt;. It may be done
+in the same way version control systems work - eg. by adding an empty &lt;code&gt;.go&lt;/code&gt;
+file to our environment:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;myappenv/
+  .go
+  bin/
+  pkg/
+  src/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The implementation is very simple. I just patched the &lt;code&gt;src/pkg/go/build.go&lt;/code&gt; file
+with this code:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;discoverLocalGOPATH&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;gopath&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ok&lt;/span&gt; &lt;span class="n"&gt;bool&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;var&lt;/span&gt; &lt;span class="n"&gt;pwd&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dotgo&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;
+        &lt;span class="k"&gt;var&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="n"&gt;error&lt;/span&gt;
+
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;pwd&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Getwd&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;return&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="n"&gt;pwd&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="s"&gt;"/"&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="n"&gt;pwd&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pathpkg&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Dir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pwd&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;dotgo&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pathpkg&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pwd&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s"&gt;".go"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Stat&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;dotgo&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;==&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                        &lt;span class="n"&gt;gopath&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ok&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pwd&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;true&lt;/span&gt;
+                        &lt;span class="k"&gt;return&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;defaultContext&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="n"&gt;Context&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;var&lt;/span&gt; &lt;span class="n"&gt;c&lt;/span&gt; &lt;span class="n"&gt;Context&lt;/span&gt;
+
+        &lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOARCH&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;envOr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"GOARCH"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;runtime&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOARCH&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOOS&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;envOr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"GOOS"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;runtime&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOOS&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOROOT&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;runtime&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOROOT&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOPATH&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;envOr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"GOPATH"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s"&gt;""&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="c1"&gt;// We have to prepend a local GOPATH if we find an `.go` file&lt;/span&gt;
+        &lt;span class="c1"&gt;// in one of the parent locations of current directory.&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;localGOPATH&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ok&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;discoverLocalGOPATH&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt; &lt;span class="n"&gt;ok&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOPATH&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;localGOPATH&lt;/span&gt; &lt;span class="p"&gt;+&lt;/span&gt; &lt;span class="s"&gt;":"&lt;/span&gt; &lt;span class="p"&gt;+&lt;/span&gt; &lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;GOPATH&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+
+        &lt;span class="c1"&gt;// *snip*&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;That's how we get rid of the annoying &lt;code&gt;GOPATH&lt;/code&gt;, or actually make it more
+useful and intuitive - different environments with no configuration at
+all. The local env is recognized by its &lt;code&gt;.go&lt;/code&gt; file and the path to this directory
+will be prepended to &lt;code&gt;GOPATH&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Now the hardest part - dependnecy tracking. Lets say our application
+is &lt;code&gt;myappenv/src/acme.com/foobar&lt;/code&gt; and depends on a few other packages.
+Instead of versioning this application only and looking for the way
+to track dependencies, let's version &lt;code&gt;~/myappenv&lt;/code&gt; directly. Lets do it
+with git as an example:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd ~/myappenv
+$ git init
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;If we depend on mercurial based projects, then it's easy - just add them
+to the repo with all the &lt;code&gt;hg&lt;/code&gt; files. If we have git based dependencies
+then it's more tricky, because git doesn't allow the tracking of nested repositories
+without using submodules. It forces us to patch one more thing out there.
+This time in the &lt;code&gt;src/cmd/go/vcs.go&lt;/code&gt; file:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="c1"&gt;// first we have to add submoduleCmd to vcs configurations:&lt;/span&gt;
+&lt;span class="k"&gt;var&lt;/span&gt; &lt;span class="n"&gt;vcsGit&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;vcsCmd&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;
+       &lt;span class="c1"&gt;// *snip*&lt;/span&gt;
+       &lt;span class="n"&gt;submoduleCmd&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s"&gt;"submodule add {repo} {dir}"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+       &lt;span class="c1"&gt;// *snip*&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="c1"&gt;// ... Now we have to extend create function:&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;v&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;vcsCmd&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;create&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;dir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;repo&lt;/span&gt; &lt;span class="nb"&gt;string&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;error&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;rootV&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;root&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ok&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;vcsForLocalRoot&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;v&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;ok&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;dir&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;strings&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TrimLeft&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;strings&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TrimLeft&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;dir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;root&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="s"&gt;"/"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;rootV&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;run&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;root&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;rootV&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;submoduleCmd&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s"&gt;"dir"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s"&gt;"repo"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;repo&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;v&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;run&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"."&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;v&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;createCmd&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s"&gt;"dir"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dir&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s"&gt;"repo"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;repo&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To avoid overhead of code I can just tell you that &lt;code&gt;vcsForLocalRoot&lt;/code&gt; func
+checks if we're in a local env, if so it checks if it's versioned with
+the same version control system as our dependency, and if so it adds that
+dependency as a submodule instead of cloning it directly. Everything else
+remains the same. &lt;a href="http://code.google.com/r/chris-go/source/checkout"&gt;You can get the patched version and try it out&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;How do we use it now? Very simple - first of all throw your &lt;code&gt;GOPATH&lt;/code&gt; configuration
+away, you don't need it anymore. There's one more new feature added there,
+the &lt;code&gt;init&lt;/code&gt; command:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go init ~/myappenv
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;You can also specify which version control system you want to use:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go init -c hg ~/myappenv
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;This command will create the environment structure in a specified directory
+(the directory doesn't need to exist). I'm a lazy bastard, I didn't add a
+few things there yet, i.a you have to create the ignore file on your own,
+it should contain:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;/bin/*
+/pkg/*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;You also have to make initial commit manually, eg:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git add . &amp;amp;&amp;amp; git commit -m "hello go"
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;When you write some code and want to download dependencies, just run
+&lt;code&gt;go get&lt;/code&gt; as usual. Remember that you have to commit changes after
+dependnecies are installed:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd ~/myappenv
+$ go get ./...
+$ git add . &amp;amp;&amp;amp; git commit -m "added X and Y deps"
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id="Bootstrap,+deploy..."&gt;Bootstrap, deploy...&lt;/h3&gt;
+
+&lt;p&gt;Using this approach you have the whole environment necessary to run
+your application in one place, safely versioned in your application's
+repository. You can deploy or boostrap this application quickly and
+in 2 steps.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git clone git@acme.com:myappenv.git
+$ cd ~/myappenv
+$ git submodule init &amp;amp;&amp;amp; git submodule update
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We can definitely call it a one click deploy :P. What's more important,
+the deploy doesn't depend on any external sources, everything's bundled
+there with your project. We also have full control over each part of
+the system - each dependency can be separately updated, changed or
+patched. You can even replace the repository source with your monkey patched
+fork without affecting the import paths in your sources!&lt;/p&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-marvelous-1.jpg" alt="Marvelous!"&gt;
+&lt;/div&gt;
+
+
+&lt;h3 id="Summary"&gt;Summary&lt;/h3&gt;
+
+&lt;p&gt;I'm curious about your oppinions and feedback about the stuff I wrote. From the short
+reaserch I've been doing everyone appears to love getting rid of &lt;code&gt;GOPATH&lt;/code&gt; in favor
+of local environments. A few persons I asked around are still confused about
+dealing with submodules - to be honest I'm not 100% convinced to this
+approach yet, but so far it's the best I've found and matches the requirements
+I wrote down. I'm sure we can improve that part together. That's all folks,
+waiting for your comments.&lt;/p&gt;
+
+&lt;p&gt;Like always thanks to &lt;a href="http://twitter.com/poteland"&gt;pote&lt;/a&gt; for reviewing
+my ugly english.&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <id>tag:areyoufuckingcoding.me,2012-03-25:/2012/03/25/nothing-really-matters/</id>
+    <title type="html">Nothing really matters</title>
+    <published>2012-03-24T23:00:00Z</published>
+    <updated>2012-03-24T23:00:00Z</updated>
+    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/03/25/nothing-really-matters/"/>
+    <content type="html">&lt;p&gt;It's been over a year since I joined &lt;a href="http://cuboxlabs.com/"&gt;Cubox&lt;/a&gt;. In the last
+few days, visiting my motherland and participating in the amazing
+&lt;a href="http://wrocloverb.com"&gt;wroc_love.rb conference&lt;/a&gt; led me to several reflections.
+The fun is that all my technical and non-technical reflections
+started joining together and clarifying my hacker's mindset.&lt;/p&gt;
+
+&lt;p&gt;These reflections were also heaviliy inspired by many people, i.a. drunk
+&lt;a href="http://twitter.com/apotonick"&gt;apotonick&lt;/a&gt; repeating all the time that
+&lt;strong&gt;Nothing really matters&lt;/strong&gt; :). Let me tell you how true this sentence is
+in the case of your business, code and even life.&lt;/p&gt;
+
+&lt;h3 id="To+hack+or+not+to+hack?"&gt;To hack or not to hack?&lt;/h3&gt;
+
+&lt;p&gt;I joined Cubox as a hacker, geek and crazy optimization monster, doing
+a lot of cool stuff, tweaking things up, learning and enjoying the code.
+This blog post will be a retrospection of all the things I screwed up and
+the cool things I figured out during 2011. All the things about
+designing applications, about building them, about choosing right tools...
+and about the business behind all of this. It will be about my metamorphosis
+from a typical optimization monster into devoted K.I.S.S. evangelist and
+lean approach enthusiast. It will also show you how I understand Lean
+Startup and how do I think lean code should look like.&lt;/p&gt;
+
+&lt;h3 id="Integration+vs.+acceptance+testing"&gt;Integration vs. acceptance testing&lt;/h3&gt;
+
+&lt;p&gt;The first idea I was working on at the new job was a way to speed up slow Selenium
+tests. I was figuring out many weird things, from improving speed of ExtJS,
+through faster ruby driver for V8 engine and at the headless browser
+C++ library ending. Woah, that was a total failure. It was like this...&lt;/p&gt;
+
+&lt;blockquote&gt;
+Yeah, there's V8 engine and it's awesome, and there's therubyracer
+but is very slow so let's speed it up, oh but if we use ExtJS it still
+sucks, I can write everything in C...
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;But meanwhile I realized something way more important: instead of speeding up
+the tool (a very complicated tool) we should speed our tests up. Besides
+&lt;strong&gt;the idea of running integration tests is to test if all the parts of
+a system are composed into one integral application in the production
+environment&lt;/strong&gt;. There's no point to test the app in some virtual environment
+which just simulates (poorly) all the others, widely used&lt;/p&gt;
+
+&lt;p&gt;Also, I started listening to many people around, and they all said
+laudly and with confidence:&lt;/p&gt;
+
+&lt;blockquote&gt;
+It's Cucumber fault that our tests are slow! Cucumber is too slow!
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;Or others, including me:&lt;/p&gt;
+
+&lt;blockquote&gt;
+It's Rails fault! It's too slow at boot so our tests are slow!
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;And we started using some pure RSpec tests based on Capybara, figuring out
+how to optimize Rails etc. But it was the same... Capybara, Cucumber, RSpec
+and Rails are only tools. They don't matter, it's &lt;strong&gt;only a delivery method&lt;/strong&gt;
+for some part of our logic. &lt;strong&gt;The logic which supposted to be tested&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;A few days ago, I had a horrible hangover, drinking some &lt;a href="https://twitter.com/#!/nu7hatch/status/179605961886015488"&gt;mate&lt;/a&gt;
+with &lt;a href="http://twitter.com/DrummerHead"&gt;DrummerHead&lt;/a&gt; and reading again
+&lt;a href="http://twitter.com/godfoca"&gt;godfoca's&lt;/a&gt; internal mail about the bussiness
+value of splitting stories up into tasks (maybe he will publish it, worth
+reading), juggling with some DCI papers around and listening to
+&lt;a href="http://confreaks.com/videos/759-rubymidwest2011-keynote-architecture-the-lost-years"&gt;Uncle Bob Martin's talk at Ruby Midwest&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Then I figured something out... Well I didn't really, I just realized
+something. I think that the user stories heavily and laudly promoted by BDD
+and Cucumber are simply describing the wrong things. Let me put it this way:
+they test things that don't matter at all for your business. Take a look
+at the story:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;As a bar client
+In order to drink a beer
+I want to go to the bar
+Order a beer
+And when I pay for it with cash
+I want to see my beer on the table
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Hey, guys, no offense... but that sounds retarded. Besides, that's just
+GUI testing! Some people may want to pay for the beer with a credit card, or open
+a check and pay everything at the end. Others may want to order a beer from
+the table without going to the bar. That kind of story doesn't test
+your business requiremenets, they don't apply to your domain logic! Your
+&lt;code&gt;Client&lt;/code&gt; domains should be:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;- Drink a beer
+- Be able to pay with cash or by card
+- Be able to open check and pay at the end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;You may notice that I don't mention the &lt;code&gt;bar&lt;/code&gt; at all, because that's only
+our &lt;strong&gt;delivery method&lt;/strong&gt;, that's only a framework which may change in the
+future. Going to the &lt;code&gt;bar&lt;/code&gt; is not &lt;code&gt;client&lt;/code&gt; domain here. We may change &lt;code&gt;bar&lt;/code&gt;
+into &lt;code&gt;delivery service&lt;/code&gt; or &lt;code&gt;cute blonde waitress&lt;/code&gt; and his domain
+doesn't chage. He will be able to drink beer and pay for it however
+he wants. &lt;strong&gt;Acceptance tests are supposed to test domain logic, not
+the delivery method&lt;/strong&gt;. The delivery method is only a tool, a plugin which
+may be replaced at any time, without affecting your business model.
+Delivery methods should be tested by an &lt;strong&gt;integration tool&lt;/strong&gt; and be part
+of the &lt;strong&gt;continuous integration process&lt;/strong&gt; only!&lt;/p&gt;
+
+&lt;p&gt;Uncle Bob said something great, something I did repeat many times myself
+but that some laud Rubyists around had different oppinions on:&lt;/p&gt;
+
+&lt;blockquote&gt;
+The suite of tests is not there to satisfy the QA groups, it
+is not there to prove to other people that our code works. The suite 
+of tests is there so that we can refactor. So that when we bring the 
+code up to our screen then we're not afraid of it.
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;Think about it guys...&lt;/p&gt;
+
+&lt;h3 id="More+and+more+hammers"&gt;More and more hammers&lt;/h3&gt;
+
+&lt;p&gt;The second thing I recently realized was how pathological the application
+design process is. Most of the projects we star from scratch start in a
+pointless discussion of which framework is better, what database
+should we use, what templating system should we apply, etc. &lt;strong&gt;We are
+discussing about unimportant crap&lt;/strong&gt;!&lt;/p&gt;
+
+&lt;blockquote&gt;
+- I bet we are gonna have a lot of writes, let's use Cassandra! &lt;br&gt;
+- Bullshit, there will be lot of reads too, Redis is best for that! &lt;br&gt;
+- Fuck you! Let's do something simple first and then optimize,
+  we should start with MySQL! &lt;br&gt;
+- I don't want to live on this planet anymore... &lt;br&gt;
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;Maybe I am exaggerating, but there's a lot of bootstrap conversations
+that look like this. But you know what? &lt;strong&gt;nothing really matters&lt;/strong&gt;...
+Those who have seen Uncle Bob's talk at Ruby Midwest should already
+know that databases and frameworks are &lt;strong&gt;only tools&lt;/strong&gt;, all this stuff,
+all the hammers are &lt;strong&gt;only plugins&lt;/strong&gt; and should be treated so.&lt;/p&gt;
+
+&lt;h3 id="Lean+hacking?"&gt;Lean hacking?&lt;/h3&gt;
+
+&lt;p&gt;Thus, databases and frameworks are only delivery methods, we
+don't know at the beginning of a project which one to use anyway. To be lean you
+have to deliver a minimum viable domain model to your users and learn
+from how they react. &lt;strong&gt;The way how you deliver your domain logic
+is not important at all&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;The book "The Lean Startup"  has become extremally popular recently. It has
+been especially adopted by all the Rails developers and dev shops.&lt;/p&gt;
+
+&lt;blockquote&gt;
+Yeah, we're fantastic because we can build a Rails app in 2 weeks
+and validate your idea!
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;But again, Rails is only a tool, Rails doesn't determine the process
+of the lean product building. No tool does it! The &lt;strong&gt;Lean approach
+is this one which allows you to validate your domain model quickly by
+measuring reactions of the users of your product&lt;/strong&gt;. A minimum viable
+product. If you make the validation of your domain logic (your idea) depend
+on the tool, on the framework or on the database then you're not lean,
+you are lost in dependencies' and tools' hell every time when you
+want to change something. You are not lean, just an Agile Rails Development
+shop or any other framework hyper! &lt;strong&gt;Lean is about eliminating any kind
+of waste&lt;/strong&gt;. Oh, what's that? Aren't all the dependencies, plugins
+and tools which affect your domain model a waste?&lt;/p&gt;
+
+&lt;h3 id="Clients+from+hell..."&gt;Clients from hell...&lt;/h3&gt;
+
+&lt;p&gt;Yeah, but we have to do the clients work, we have to deliver things,
+we have to match their expectations, right? You know what... now
+with humongous confidence I can say NO! Clients have ideas, and want
+to realize them to check if they're ok. &lt;strong&gt;But clients want the designing of
+the app to be the validation of their idea&lt;/strong&gt; as well. Most
+developers used to say:&lt;/p&gt;
+
+&lt;blockquote&gt;
+Oh, that client wants to do some shitty reports there. We know that's
+shit but they want to have it, let's do it then...
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;But that's wrong! &lt;strong&gt;Lean consultants should help the client to find
+the best way to validate his product and eliminate waste&lt;/strong&gt;. If you
+think that something your client wants is a piece of crap and nobody is
+going to use it &lt;strong&gt;say it&lt;/strong&gt;. Insist to measure user needs. Doing
+all the features required by the client super fast doesn't equal
+being lean. &lt;strong&gt;Being lean means that you are a logical filter for all
+the client's bad ideas&lt;/strong&gt; - this is the very first validation of his
+product.&lt;/p&gt;
+
+&lt;p&gt;The second problem with the clients is that they used to come with something like this:&lt;/p&gt;
+
+&lt;blockquote&gt;
+We have an idea for a &lt;strong&gt;Rails application&lt;/strong&gt;.
+&lt;/blockquote&gt;
+
+
+&lt;p&gt;No motherfucker! You don't want to build a Rails app, what you want to
+build is &lt;strong&gt;an application&lt;/strong&gt;. It may become a Rails app, it may become a
+Sinatra app, it may be even a console app, it doesn't matter. As I said
+before that it is only a delivery method, and from the lean perspective
+it's nothing else than &lt;strong&gt;waste&lt;/strong&gt;. Mocks are friends of lean approach,
+&lt;strong&gt;mock everything you can, that's the fastest way to see if your potential
+users are going to like it or not&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h3 id="(C)lean+code..."&gt;(C)lean code...&lt;/h3&gt;
+
+&lt;p&gt;You know what, let's drink some beer now. But let's do it in a
+different way. We are going to do it with Ruby today, sorry to all the Gophers
+reading this article. I'll make some special episode about DDD in Go next
+time. We're going to start writing the story and tests - that's how
+TDD, BDD and other *DD variations works. &lt;strong&gt;You have to write tests first&lt;/strong&gt;,
+otherwise you are just waisting time (eliminate waste, remember?).&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-gherkin"&gt;&lt;span class="k"&gt;Feature:&lt;/span&gt;&lt;span class="nf"&gt; Drinking beer&lt;/span&gt;
+
+&lt;span class="nf"&gt;  &lt;/span&gt;&lt;span class="k"&gt;Scenario:&lt;/span&gt;&lt;span class="nf"&gt; Drink a beer&lt;/span&gt;
+&lt;span class="k"&gt;    When &lt;/span&gt;&lt;span class="nf"&gt;I pick a beer&lt;/span&gt;
+&lt;span class="nf"&gt;    &lt;/span&gt;&lt;span class="k"&gt;Then &lt;/span&gt;&lt;span class="nf"&gt;I want to drink the beer I choose&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Let's say we want to have a beer drinking service:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="no"&gt;When&lt;/span&gt;&lt;span class="sr"&gt; /I pick a beer/&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+  &lt;span class="vi"&gt;@drinking&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;BeerDrinkingService&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+
+&lt;span class="no"&gt;Then&lt;/span&gt;&lt;span class="sr"&gt; /I want to drink the beer I choose/&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+  &lt;span class="vi"&gt;@drinking&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;call&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;should&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s2"&gt;"Pssst! Gulp, gulp, gulp... aaaah!"&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Now we know exactly what we want to do, we need a beer:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;Beer&lt;/span&gt;
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;drink&lt;/span&gt;
+    &lt;span class="s2"&gt;"Pssst! Gulp, gulp, gulp... aaaah!"&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;... and some client who wants to drink it:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;Client&lt;/span&gt;
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;drink_a_beer&lt;/span&gt;
+    &lt;span class="no"&gt;Beer&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drink&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Finally, we have to provide some way for the client o drink the beer
+easily, we need some &lt;strong&gt;interaction&lt;/strong&gt;:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;BeerDrinkingService&lt;/span&gt;
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;initialize&lt;/span&gt;
+    &lt;span class="vi"&gt;@client&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;Client&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;call&lt;/span&gt;
+    &lt;span class="vi"&gt;@client&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drink_a_beer&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And you know what, that's already our minimum viable product! We have
+a client who can drink a beer, lovely! After we show it to potential clients
+they may not want to drink just some random beer. Maybe they want to select
+their favorite Scenario first:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-gherkin"&gt;&lt;span class="k"&gt;Feature:&lt;/span&gt;&lt;span class="nf"&gt; Drining beer&lt;/span&gt;
+
+&lt;span class="nf"&gt;  &lt;/span&gt;&lt;span class="k"&gt;Scenario:&lt;/span&gt;&lt;span class="nf"&gt; Drink favorite beer&lt;/span&gt;
+&lt;span class="k"&gt;    When &lt;/span&gt;&lt;span class="nf"&gt;I pick my favorite "&lt;/span&gt;&lt;span class="s"&gt;Belfast&lt;/span&gt;&lt;span class="nf"&gt;" beer&lt;/span&gt;
+&lt;span class="nf"&gt;    &lt;/span&gt;&lt;span class="k"&gt;Then &lt;/span&gt;&lt;span class="nf"&gt;I want to drink the beer I choose&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The tests may looks like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="no"&gt;When&lt;/span&gt;&lt;span class="sr"&gt; /I pick my favorite "(.*)" beer/&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;beer_brand&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+  &lt;span class="vi"&gt;@drinking&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;BeerDrinkingService&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;beer_brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+
+&lt;span class="no"&gt;Then&lt;/span&gt;&lt;span class="sr"&gt; /I want to drink the beer I choose/&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+  &lt;span class="vi"&gt;@drinking&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;call&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;should&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s2"&gt;"Pssst! Gulp, gulp, gulp... aaaah!"&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And the code...&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;Client&lt;/span&gt;
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;drink_a_beer&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="no"&gt;Beer&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drink&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+
+&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;Beer&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="no"&gt;Struct&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;:brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;drink&lt;/span&gt;
+    &lt;span class="nb"&gt;puts&lt;/span&gt; &lt;span class="s2"&gt;"Pssssst! Gulp, gulp, gulp... aaaah!"&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+
+&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;BeerDrinkingService&lt;/span&gt;
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;initialize&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;beer_brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="vi"&gt;@client&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;Client&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;
+    &lt;span class="vi"&gt;@beer_brand&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;beer_brand&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;call&lt;/span&gt;
+    &lt;span class="vi"&gt;@client&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drink_a_beer&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;beer_brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Going further, now we may want to know how drunk the guy is. Maybe we
+don't want to sell him a beer when he looks like a sack of potatoes.
+Scenarios, scenarios, scenarios:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-gherkin"&gt;&lt;span class="k"&gt;Feature:&lt;/span&gt;&lt;span class="nf"&gt; Drining beer&lt;/span&gt;
+
+&lt;span class="nf"&gt;  &lt;/span&gt;&lt;span class="k"&gt;Scenario:&lt;/span&gt;&lt;span class="nf"&gt; Drink a favorite beer&lt;/span&gt;
+&lt;span class="k"&gt;    When &lt;/span&gt;&lt;span class="nf"&gt;I pick my favorite "&lt;/span&gt;&lt;span class="s"&gt;Belfast&lt;/span&gt;&lt;span class="nf"&gt;" beer&lt;/span&gt;
+&lt;span class="nf"&gt;    &lt;/span&gt;&lt;span class="k"&gt;Then &lt;/span&gt;&lt;span class="nf"&gt;I want to drink the beer I choose&lt;/span&gt;
+
+&lt;span class="nf"&gt;  &lt;/span&gt;&lt;span class="k"&gt;Scenario:&lt;/span&gt;&lt;span class="nf"&gt; Getting wasted&lt;/span&gt;
+&lt;span class="k"&gt;    When &lt;/span&gt;&lt;span class="nf"&gt;I drink my favorite "&lt;/span&gt;&lt;span class="s"&gt;Belfast&lt;/span&gt;&lt;span class="nf"&gt;" beer until I look like a sack of potaoes&lt;/span&gt;
+&lt;span class="nf"&gt;    &lt;/span&gt;&lt;span class="k"&gt;Then &lt;/span&gt;&lt;span class="nf"&gt;I should not get another beer&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Tests, tests, tests!&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="no"&gt;Then&lt;/span&gt;&lt;span class="sr"&gt; /I want drink favorite "(.*)" beer until I get look like sack of potaoes/&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;beer_brand&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+  &lt;span class="vi"&gt;@beer_brand&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;beer_brand&lt;/span&gt;
+  &lt;span class="mi"&gt;10&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;times&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+    &lt;span class="n"&gt;step&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="sx"&gt;%(I pick my favorite "&lt;/span&gt;&lt;span class="si"&gt;#{&lt;/span&gt;&lt;span class="vi"&gt;@beer_brand&lt;/span&gt;&lt;span class="si"&gt;}&lt;/span&gt;&lt;span class="sx"&gt;" beer)&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;step&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="sx"&gt;%(I want to drink the beer I choose)&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+
+&lt;span class="no"&gt;Then&lt;/span&gt;&lt;span class="sr"&gt; /I should not get another beer/&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+  &lt;span class="n"&gt;step&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="sx"&gt;%(I pick my favorite "&lt;/span&gt;&lt;span class="si"&gt;#{&lt;/span&gt;&lt;span class="vi"&gt;@beer_brand&lt;/span&gt;&lt;span class="si"&gt;}&lt;/span&gt;&lt;span class="sx"&gt;" beer)&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="vi"&gt;@drinking&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;call&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;should&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="kp"&gt;false&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And the code is growing:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;Client&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="no"&gt;Struct&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;:drunkness&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;drink_a_beer&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="nb"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drunkenness&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+    &lt;span class="no"&gt;Beer&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drink&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;drunkness&lt;/span&gt;
+    &lt;span class="vi"&gt;@drunkness&lt;/span&gt; &lt;span class="o"&gt;||=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;waisted?&lt;/span&gt;
+    &lt;span class="nb"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drunkenness&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;6&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;sack_of_potatoes?&lt;/span&gt;
+    &lt;span class="nb"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drunknness&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;9&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+
+&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;BeerDrinkingService&lt;/span&gt;
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;initialize&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;client_id&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;beer_brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="vi"&gt;@client&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;ClientsRepository&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;find_by_id_or_create&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;client_id&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="vi"&gt;@beer_brand&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;beer_brand&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;valid?&lt;/span&gt;
+    &lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="vi"&gt;@client&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;sack_of_potatoes?&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;call&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="kp"&gt;false&lt;/span&gt; &lt;span class="k"&gt;unless&lt;/span&gt; &lt;span class="n"&gt;valid?&lt;/span&gt;
+    &lt;span class="vi"&gt;@client&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;drink_a_beer&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="vi"&gt;@beer_brand&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Two new things shown up around the code: the first is validation, thus this
+dumb example is enough to return false if someone can't drink the
+beer. Otherwise we can consider returning some errors hash. In fact,
+validations are very hard problem itself. There's a holy war about where
+do validations should belong to, should they belong to the model like in
+ActiveRecord? But this requires dealing with various contexts very often.
+To the service, or form? Well, this may cause unncecessery repetition,
+and we don't want to repeat ourselves. Or maybe validators should be totally separated
+objects, service-like callables for checking various requirements on
+the passed objects? I personally think that what belongs to model,
+should be there, what belongs to service/form should be there. No
+mixing contexts, there's nothing worse than dealing with extra states.
+I think validations itself is a good topic for a future blog post,
+stay tuned for it.&lt;/p&gt;
+
+&lt;p&gt;The second new thing is &lt;code&gt;ClientsRepository&lt;/code&gt;, what's that? This is our
+proxy to data storage. &lt;strong&gt;Some, undefined data storage&lt;/strong&gt;. You shouldn't
+imagine storage as a database. Storage is just a detail. It may be a
+simple Ruby hash. Speaking shortly, &lt;strong&gt;It doesn't mather at all&lt;/strong&gt;.
+Here's how our clients repository may look like:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;ClientsMockRepository&lt;/span&gt;
+  &lt;span class="no"&gt;DB&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{}&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nc"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="nf"&gt;auto_increment&lt;/span&gt;
+    &lt;span class="vi"&gt;@auto_increment&lt;/span&gt; &lt;span class="o"&gt;||=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;
+    &lt;span class="vi"&gt;@auto_increment&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nc"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="nf"&gt;find_by_id&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;client_id&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="no"&gt;DB&lt;/span&gt;&lt;span class="o"&gt;[&lt;/span&gt;&lt;span class="n"&gt;client_id&lt;/span&gt;&lt;span class="o"&gt;]&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nc"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="nf"&gt;create&lt;/span&gt;
+    &lt;span class="no"&gt;DB&lt;/span&gt;&lt;span class="o"&gt;[&lt;/span&gt;&lt;span class="n"&gt;auto_increment&lt;/span&gt;&lt;span class="o"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;Client&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+
+  &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nc"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="nf"&gt;find_by_id_or_create&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;client_id&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;find_by_id&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;client_id&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="ow"&gt;or&lt;/span&gt; &lt;span class="n"&gt;create&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+
+&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;ClientsRepository&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="no"&gt;ClientsMockRepository&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Now I can imagine a bunch of people saying, &lt;em&gt;Ohh, but how can I retrieve a list
+of all the clients&lt;/em&gt;? Let me answer you with a question: Does your domain
+model require that feature?&lt;/p&gt;
+
+&lt;p&gt;Second thing, you see that &lt;code&gt;ClientsRepository&lt;/code&gt; inherits from a mock repository
+implementation. That's how it works, the repository is just a plugin, when
+you decide that you need to have your data persisted, you can just switch
+it to MySQL, Redis or whatever other driver you like. You can use global
+variable as well, use whatever is cleaner for you:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="vg"&gt;$clients_repository&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;ClientsMockRepository&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We can go further and further, checking if the beer is available, charging
+the client for his drink, etc. etc. You can play with it at your home -
+yeah, treat it as a homework - you will see by yourself how easy is
+to implement a new features, changing existing ones and move project forward
+when you simply don't care about the details - storage, delivery method,
+views, etc.&lt;/p&gt;
+
+&lt;p&gt;Oh, let me tell ya, &lt;strong&gt;the tests are blazingly fast&lt;/strong&gt; no matter if you're
+using RSpec, Cucumber or God knows what other inventention. But, what's way
+more important for your clients, it to test what they actually do want to
+test. It doesn't test GUI or other shit which &lt;strong&gt;doesn't matter&lt;/strong&gt; at the
+moment.&lt;/p&gt;
+
+&lt;p&gt;As I said, after a while, when you may need a database, you can simply
+write a driver for it, a plugin, because &lt;strong&gt;a database is nothing more
+than a plugin&lt;/strong&gt;... The same happens with visual representations, we can
+wrap our interaction around with some boundaries, write some presenter
+for it, write bunch of Rails spaghetti. We can expose it as a webservice
+and present using only JavaScript. There's no limits, can you see it now?
+&lt;strong&gt;You should always keep as much doors open as possible. Good architectural
+decisions allows you to keep doors open&lt;/strong&gt;, use it wisely.&lt;/p&gt;
+
+&lt;h3 id="Optimize...+pivot?"&gt;Optimize... pivot?&lt;/h3&gt;
+
+&lt;p&gt;Well, that's all for today. Some of you guys may consider this article
+as a pivot against your mindset, for some it may be just optimization,
+for many others it may be total bullshit. I will be happy to meet
+all of you and listen to your constructive feedback. Maybe your
+feedback will cause a pivot in my mindset? For sure it will optimize
+it!&lt;/p&gt;
+
+&lt;p&gt;At the end, I would like to also thank Cubox for how they helped me to
+change my mindset during last year. Thanks to &lt;a href="http://twitter.com/apotonick"&gt;apotonick&lt;/a&gt;
+again! Big thanks to &lt;a href="https://twitter.com/saturnflyer"&gt;Jim Gay&lt;/a&gt; for his
+great talk at wroc_love.rb about DCI - even if I don't agree with all the
+presented ideas it helped me a lot to clarify mine :P. Also, thanks
+to &lt;a href="https://twitter.com/tlossen"&gt;Tim Lossen&lt;/a&gt; for raising the glove
+in the battle between monolythic apps versus web-services I go for,
+which caused me to dig deeper and deeper about this topic. I can't wait to see
+your talk at EuRuKo! And of course thanks to &lt;a href="http://anarchogeek.com"&gt;rabble&lt;/a&gt;
+for infecting me with Lean Startup stuff and making me understand it
+in practice.&lt;/p&gt;
+
+&lt;p&gt;Like always thanks to &lt;a href="http://twitter.com/poteland"&gt;pote&lt;/a&gt; for reviewing
+my ugly english.&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <id>tag:areyoufuckingcoding.me,2012-02-27:/2012/02/27/go-powered-webservices-with-rails/</id>
+    <title type="html">Go-powered web-services with Rails</title>
+    <published>2012-02-26T23:00:00Z</published>
+    <updated>2012-02-26T23:00:00Z</updated>
+    <link rel="alternate" href="http://areyoufuckingcoding.me/2012/02/27/go-powered-webservices-with-rails/"/>
+    <content type="html">&lt;p&gt;Today's episode will be about &lt;strong&gt;using the right tools to solve a concrete problem&lt;/strong&gt; and is
+influenced by all the questions about Rails-like frameworks in Go which recently shown
+up on the &lt;em&gt;golang-nuts&lt;/em&gt; mailing list.&lt;/p&gt;
+
+&lt;p&gt;Hater mode ON. I stubbornly believe that efforts to clone Rails in any other
+programming language (Go included) are just ridiculous. If you want to use Rails,
+&lt;strong&gt;learn Ruby motherfucker&lt;/strong&gt;! The second thing which I strongly believe in, is to know
+the strengths and weaknesses of &lt;strong&gt;all the tools we're using&lt;/strong&gt;, and choosing those which
+may solve the problem with &lt;strong&gt;minimal effort and maximal benefits&lt;/strong&gt;. That's why, no
+matter how much I like Go, I wouldn't decide to write full-stack web application
+in it. Btw, to all the people looking Rails-like framework in Go...&lt;/p&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-obama-disappoint-1.jpg" alt="I'm disappoint"&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;Hater mode OFF.&lt;/p&gt;
+
+&lt;h3 id="But,+but...+there+are+websites+in+Go!?"&gt;But, but... there are websites in Go!?&lt;/h3&gt;
+
+&lt;p&gt;Yes, of course there are. The same as we have the D programming language forum written
+in D or a web applications framework for C++. You can do it, the main question of
+this article is, &lt;strong&gt;is it worth it&lt;/strong&gt;? Let me explain you everything by example...&lt;/p&gt;
+
+&lt;p&gt;Let's figure out some app we could do in Rails in a few hours. Oh, it would be
+fun to have some small web app where you can upload your picture, apply
+some filter and share it with your friends. Yeap gophers, I choose
+this in purpose, to compare with &lt;a href="http://moustach-io.appspot.com/"&gt;mustachio&lt;/a&gt;.
+Here's how the project specification could look like:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;As an anonymous user I want to go to the home page, select a picture from
+my hard drive, click the "Upload" button and then see it uploaded.&lt;/li&gt;
+&lt;li&gt;When I am on the uploaded picture page, I want to see my original picture
+and buttons with available filters.&lt;/li&gt;
+&lt;li&gt;When I am on the uploaded picture page and I click one of the filter
+buttons I want to see my picture with that filter applied.&lt;/li&gt;
+&lt;li&gt;When I am on the uploaded picture page after I select which filters to apply
+and click the "Done" button, then I want to see a link which I can share with my
+friends.&lt;/li&gt;
+&lt;/ul&gt;&lt;p&gt;Simple stuff to do, isn't it? We can build it very quickly using Rails,
+&lt;a href="https://github.com/jnicklas/carrierwave"&gt;CarrierWave&lt;/a&gt; and &lt;a href="http://www.imagemagick.org/script/index.php"&gt;ImageMagick&lt;/a&gt;,
+powered up with some NoSQL datastore if needed. But the truth is that we could write
+such an app in Go quite easily. It would be slightly more difficult, it could require a bigger
+code base and take a little longer, but in exchange produce a splendidly performant
+application... I mentioned &lt;a href="http://moustach-io.appspot.com/"&gt;mustachio&lt;/a&gt; as a good
+example of it, so why not to do this?&lt;/p&gt;
+
+&lt;h3 id="Expectations"&gt;Expectations&lt;/h3&gt;
+
+&lt;p&gt;Let's take a look at the problem from the &lt;strong&gt;business side&lt;/strong&gt;. We are building something
+new, we know how to do this, but we have no idea how many people is going to use
+it, how much resources we may need to maintain that app, etc. We want to try it out,
+write a minimum viable product, show it to the people and check how many of them
+are going to use it. That's why we're going to implement stuff with &lt;strong&gt;minimum effort&lt;/strong&gt;,
+using technologies &lt;strong&gt;we know the best&lt;/strong&gt;. Of course there may be a problem if the site
+goes down under the flood of enthusiastic users... but, isn't that a problem
+we want to have? When this happens, then we can extract the most loaded parts of
+our app into &lt;strong&gt;fast web-services written in Go&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-i-dont-always-1.jpg" alt="I don't always write websites in Go"&gt;
+&lt;/div&gt;
+
+
+&lt;h3 id="Tweaking+up!"&gt;Tweaking up!&lt;/h3&gt;
+
+&lt;p&gt;So let's imagine that our application encountered a huge amount of users. It's easy
+to figure out that the most loaded part of the app will be images processing and
+applying filters. What we can do in that case is to leave ImageMagick behind
+and use the &lt;a href="http://weekly.golang.org/pkg/image"&gt;&lt;strong&gt;image&lt;/strong&gt;&lt;/a&gt; package from the Go
+standard library instead. Everything nicely wrapped around with &lt;strong&gt;HTTP web services&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;First, we have to tell our Rails app where the images are going to come from.
+Rails 3.x allows us to specify the &lt;code&gt;asset_host&lt;/code&gt; in the controller's configuration:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-ruby"&gt;&lt;span class="no"&gt;ActionController&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="no"&gt;Base&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;asset_host&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;Proc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+  &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;starts_with?&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'/uploads'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="s2"&gt;"http://filters.ournicepage.com"&lt;/span&gt;
+  &lt;span class="k"&gt;else&lt;/span&gt;
+    &lt;span class="s2"&gt;"http://ournicepage.com"&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;As you can see, we can tell Rails to load only the images from a different location
+and keep using all other assets normally. You can find out more about it in &lt;a href="http://api.rubyonrails.org/classes/ActionView/Helpers/AssetTagHelper.html"&gt;the
+AssetTagHelper documentation&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Now we need to have something to serve on &lt;em&gt;filters.ourpage.com&lt;/em&gt;. This is not a post
+about image processing etc, if you're hungry for the full implementation, you can find
+it &lt;a href="http://github.com/nu7hatch/golaroid"&gt;on my github&lt;/a&gt;. Here I will show you just a few
+tricks I found useful while writing this stuff.&lt;/p&gt;
+
+&lt;h3 id="Custom+HTTP+handlers"&gt;Custom HTTP handlers&lt;/h3&gt;
+
+&lt;p&gt;After going through the &lt;a href="http://tour.golang.org/#1"&gt;&lt;strong&gt;Interactive Go Tour&lt;/strong&gt;&lt;/a&gt; you probably
+know how to write a simple HTTP service. Here's how our image filtering may look like
+with the default &lt;code&gt;net/http&lt;/code&gt; stuff:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;ImageHandler&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt; &lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ResponseWriter&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Request&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ParseForm&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="c1"&gt;// we have to parse form before using its values&lt;/span&gt;
+        &lt;span class="n"&gt;path&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;filepath&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;ImagesRoot&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;FormValue&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"image"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="c1"&gt;// *snip*&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;main&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;HandleFunc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"/filter"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ImageHandler&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;log&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Fatal&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ListenAndServe&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Addr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Works, but sucks - because it gets information from GET parameters. To get a processed image
+we have to request something like this: &lt;code&gt;/filter?image=image/path&amp;amp;filter=sepia&lt;/code&gt;. If our
+Rails application provides nice URLs, like &lt;code&gt;/image/path?filter=sepia&lt;/code&gt;, then we have
+to figure our something better. One option we can use instead is &lt;a href="https://github.com/bmizerany/pat.go"&gt;&lt;strong&gt;pat.go&lt;/strong&gt;&lt;/a&gt; -
+a Sinatra style pattern multiplexer from Blake Mizerany. Our improved implementation
+may look like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;ImageHandler&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt; &lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ResponseWriter&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Request&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ParseForm&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;path&lt;/span&gt; &lt;span class="p"&gt;=&lt;/span&gt; &lt;span class="n"&gt;filepath&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;ImagesRoot&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;FormValue&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;":splat"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="c1"&gt;// *snip*&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;main&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;mux&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;pat&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;New&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;mux&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"/*"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ImageHandler&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;log&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Fatal&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ListenAndServe&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Addr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;mux&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;This looks much better, we can apply a filter to the image by requesting &lt;code&gt;/image/path?filter=sepia&lt;/code&gt;.
+But to be honest, do we really need any external mux to serve just one thing? This
+web-service does only one thing right, so we can just use a full request path to distinguish an
+image. To achieve that we have to define our &lt;a href="http://weekly.golang.org/pkg/net/http/#Handler"&gt;custom &lt;code&gt;http.Handler&lt;/code&gt;&lt;/a&gt;.
+Handler is an interface which requires a &lt;code&gt;ServeHTTP&lt;/code&gt; function to be implemented. Let's implement
+it then:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;type&lt;/span&gt; &lt;span class="n"&gt;ImageHandler&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;{}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;h&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;ImageHandler&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;ServeHTTP&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt; &lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ResponseWriter&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Request&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;path&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;filepath&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;ImagesRoot&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;URL&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Path&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="c1"&gt;// *snip*&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;main&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;srv&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Server&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;Addr&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;    &lt;span class="n"&gt;Addr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                &lt;span class="n"&gt;Handler&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;ImageHandler&lt;/span&gt;&lt;span class="p"&gt;{},&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="n"&gt;log&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Fatal&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;srv&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ListenAndServe&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id="Distinguishing+file+errors"&gt;Distinguishing file errors&lt;/h3&gt;
+
+&lt;p&gt;If you take a look at the full &lt;a href="https://github.com/nu7hatch/golaroid/blob/master/handler.go#L21"&gt;&lt;code&gt;ServeHTTP&lt;/code&gt; implementation&lt;/a&gt;.
+you will notice that I'm checking out what kind of error has been returned from
+&lt;code&gt;pic.Load()&lt;/code&gt; to produce either a &lt;code&gt;404&lt;/code&gt; or &lt;code&gt;500&lt;/code&gt; error page. The &lt;a href="http://weekly.golang.org/pkg/os/"&gt;&lt;strong&gt;os&lt;/strong&gt; package&lt;/a&gt;
+has a few helpers to do this, i.a to check if the returned error was caused by a missing
+file, we can use the &lt;a href="http://weekly.golang.org/pkg/os/#IsNotExist"&gt;&lt;code&gt;IfNotExist&lt;/code&gt; helper&lt;/a&gt;:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;pic&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Load&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt; &lt;span class="n"&gt;err&lt;/span&gt; &lt;span class="p"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;nil&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;IsNotExist&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;err&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;NotFound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;WriteHeader&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;http&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;StatusInternalServerError&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id="Custom+iterators"&gt;Custom iterators&lt;/h3&gt;
+
+&lt;p&gt;To apply custom filters to the picture in most cases we have to iterate over
+all the pixels. When our iteration contains some duplications, we can DRY it out
+using a &lt;strong&gt;custom iterator&lt;/strong&gt;, like this one for example:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;EachPixel&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;img&lt;/span&gt; &lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Image&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;fn&lt;/span&gt; &lt;span class="k"&gt;func&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;y&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;g&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="nb"&gt;uint8&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;rect&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;img&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Bounds&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;rect&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Dx&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt; &lt;span class="n"&gt;rect&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Dy&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;++&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="c1"&gt;// Bunch of calculations you shouldn't care about...&lt;/span&gt;
+                &lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;y&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="p"&gt;%&lt;/span&gt; &lt;span class="n"&gt;rect&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Dx&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;+&lt;/span&gt; &lt;span class="n"&gt;rect&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Min&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;X&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="p"&gt;/&lt;/span&gt; &lt;span class="n"&gt;rect&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Dx&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;+&lt;/span&gt; &lt;span class="n"&gt;rect&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Min&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Y&lt;/span&gt;
+                &lt;span class="n"&gt;pixel&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;img&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;At&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;y&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="n"&gt;r32&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;g32&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;b32&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a32&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;pixel&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;RGBA&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+                &lt;span class="n"&gt;r8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;g8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;b8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a8&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="nb"&gt;uint8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;r32&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="nb"&gt;uint8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;g32&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="nb"&gt;uint8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;b32&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="nb"&gt;uint8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a32&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+                &lt;span class="c1"&gt;// Executing callback on a given pixel coordinates and RGBA&lt;/span&gt;
+                &lt;span class="c1"&gt;// color values.&lt;/span&gt;
+                &lt;span class="n"&gt;fn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;y&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;g8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;b8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a8&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Such defined iterator can be used as follow:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;EachPixel&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;img&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;func&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;y&lt;/span&gt; &lt;span class="nb"&gt;int&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;g&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="nb"&gt;uint8&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="c1"&gt;// do something with colors...&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id="Anonymous+imports"&gt;Anonymous imports&lt;/h3&gt;
+
+&lt;p&gt;While playing with the &lt;a href="http://weekly.golang.org/pkg/image"&gt;&lt;strong&gt;image&lt;/strong&gt;&lt;/a&gt; package
+I found a very nice thing. Go allows you to &lt;strong&gt;anonymously import the package&lt;/strong&gt;, only
+for its initialization side effects. For example, the &lt;em&gt;image&lt;/em&gt; package defines a
+&lt;a href="http://weekly.golang.org/pkg/image#Decode"&gt;&lt;code&gt;Decode&lt;/code&gt;&lt;/a&gt; function, which is used to
+read image information from the stream. Function uses registered image formats
+to properly decode the information from &lt;code&gt;io.Reader&lt;/code&gt;. Now, each of format-specific
+sub packages registers its decoder in the initializer. The &lt;a href="http://weekly.golang.org/pkg/image/png"&gt;image/png&lt;/a&gt;
+for example does it this way:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;func&lt;/span&gt; &lt;span class="n"&gt;init&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+         &lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;RegisterFormat&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"png"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;pngHeader&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;Decode&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;DecodeConfig&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Now, if we want to decode information from the &lt;em&gt;png&lt;/em&gt; image, we can just anonymously
+import &lt;code&gt;image/png&lt;/code&gt; package:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="k"&gt;import&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt; &lt;span class="s"&gt;"image/png"&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;... and use the global &lt;code&gt;image.Decode&lt;/code&gt; function:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class="language-go"&gt;&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"file.png"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="n"&gt;img&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;_&lt;/span&gt; &lt;span class="p"&gt;:=&lt;/span&gt; &lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Decode&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We can obviously still import this package normally and use &lt;a href="http://weekly.golang.org/pkg/image/png#Decode"&gt;&lt;code&gt;png.Decode&lt;/code&gt;&lt;/a&gt;
+directly if needed.&lt;/p&gt;
+
+&lt;div class="meme"&gt;
+  &lt;img src="/img/meme-stallone-big-1.jpg" alt="This feature is such a big!"&gt;
+&lt;/div&gt;
+
+
+&lt;h3 id="Summary"&gt;Summary&lt;/h3&gt;
+
+&lt;p&gt;Ok, enough cool features for today, let's go back to our example. Just to clarify
+things at the end of this article. I'm not saying that writing web apps in Go
+is something totally wrong or bad, nor that you should use Rails to write all
+your web apps. What I want to say is that Go is a little bit different language than
+Ruby, and looking for ruby-like solutions in go is just pointless. Rails, Django or Sinatra
+work good for full stack web applications, while Go performs splendidly while
+powering them up with web-services or tools.&lt;/p&gt;
+
+&lt;p&gt;That's all for tonight, like always thanks to &lt;a href="http://twitter.com/poteland"&gt;PoTe&lt;/a&gt;
+for fixing my terrible english!&lt;/p&gt;</content>
+  </entry>
+</feed>

@@ -1,0 +1,550 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Are You Fucking Coding Me!? - Nothing really matters</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css" media="screen">
+    <meta name="description" content="Distributed computing baby! Golang, Ruby, Linux and more!">
+    <meta name="author" content="Krzysztof Kowalik aka. nu7hatch">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="gkFdodtzp59LR90Na2j-sBnfUDoZ7oBQh0g6pE562vc" />
+    <script src="js/libs/modernizr-2.0.6.min.js"></script>
+    <script>
+        var _gaq=[['_setAccount','UA-28812082-1'],['_trackPageview']];
+        (function() {
+            var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+  </head>
+  <body>
+    <div id="container">
+      <header role="banner">
+        <h1>
+          <a href="/" id="logo">Are You Fucking Coding Me!?</a>
+        </h1>                                                
+        <div class="tagline">
+          <div class="in"><a href="http://www.nu7hat.ch/">by nu7</a></div>
+        </div>
+      </header>
+      <div id="main" role="main">
+        
+          <article class="fullpost" id="2012_3_25_nothing_really_matters">
+            <header>
+              <h2>Nothing really matters</h2>
+              <div class="info">
+                posted by <span class="fn">nu7</span> /
+                <time class="created_at" datetime="2012-03-25T00:00:00+01:00">
+                  March 25, 2012
+                </time><time >
+              </div>
+            </header>
+            <p>It's been over a year since I joined <a href="http://cuboxlabs.com/">Cubox</a>. In the last
+few days, visiting my motherland and participating in the amazing
+<a href="http://wrocloverb.com">wroc_love.rb conference</a> led me to several reflections.
+The fun is that all my technical and non-technical reflections
+started joining together and clarifying my hacker's mindset.</p>
+
+<p>These reflections were also heaviliy inspired by many people, i.a. drunk
+<a href="http://twitter.com/apotonick">apotonick</a> repeating all the time that
+<strong>Nothing really matters</strong> :). Let me tell you how true this sentence is
+in the case of your business, code and even life.</p>
+
+<h3 id="To+hack+or+not+to+hack?">To hack or not to hack?</h3>
+
+<p>I joined Cubox as a hacker, geek and crazy optimization monster, doing
+a lot of cool stuff, tweaking things up, learning and enjoying the code.
+This blog post will be a retrospection of all the things I screwed up and
+the cool things I figured out during 2011. All the things about
+designing applications, about building them, about choosing right tools...
+and about the business behind all of this. It will be about my metamorphosis
+from a typical optimization monster into devoted K.I.S.S. evangelist and
+lean approach enthusiast. It will also show you how I understand Lean
+Startup and how do I think lean code should look like.</p>
+
+<h3 id="Integration+vs.+acceptance+testing">Integration vs. acceptance testing</h3>
+
+<p>The first idea I was working on at the new job was a way to speed up slow Selenium
+tests. I was figuring out many weird things, from improving speed of ExtJS,
+through faster ruby driver for V8 engine and at the headless browser
+C++ library ending. Woah, that was a total failure. It was like this...</p>
+
+<blockquote>
+Yeah, there's V8 engine and it's awesome, and there's therubyracer
+but is very slow so let's speed it up, oh but if we use ExtJS it still
+sucks, I can write everything in C...
+</blockquote>
+
+
+<p>But meanwhile I realized something way more important: instead of speeding up
+the tool (a very complicated tool) we should speed our tests up. Besides
+<strong>the idea of running integration tests is to test if all the parts of
+a system are composed into one integral application in the production
+environment</strong>. There's no point to test the app in some virtual environment
+which just simulates (poorly) all the others, widely used</p>
+
+<p>Also, I started listening to many people around, and they all said
+laudly and with confidence:</p>
+
+<blockquote>
+It's Cucumber fault that our tests are slow! Cucumber is too slow!
+</blockquote>
+
+
+<p>Or others, including me:</p>
+
+<blockquote>
+It's Rails fault! It's too slow at boot so our tests are slow!
+</blockquote>
+
+
+<p>And we started using some pure RSpec tests based on Capybara, figuring out
+how to optimize Rails etc. But it was the same... Capybara, Cucumber, RSpec
+and Rails are only tools. They don't matter, it's <strong>only a delivery method</strong>
+for some part of our logic. <strong>The logic which supposted to be tested</strong>.</p>
+
+<p>A few days ago, I had a horrible hangover, drinking some <a href="https://twitter.com/#!/nu7hatch/status/179605961886015488">mate</a>
+with <a href="http://twitter.com/DrummerHead">DrummerHead</a> and reading again
+<a href="http://twitter.com/godfoca">godfoca's</a> internal mail about the bussiness
+value of splitting stories up into tasks (maybe he will publish it, worth
+reading), juggling with some DCI papers around and listening to
+<a href="http://confreaks.com/videos/759-rubymidwest2011-keynote-architecture-the-lost-years">Uncle Bob Martin's talk at Ruby Midwest</a>.</p>
+
+<p>Then I figured something out... Well I didn't really, I just realized
+something. I think that the user stories heavily and laudly promoted by BDD
+and Cucumber are simply describing the wrong things. Let me put it this way:
+they test things that don't matter at all for your business. Take a look
+at the story:</p>
+
+<pre><code>As a bar client
+In order to drink a beer
+I want to go to the bar
+Order a beer
+And when I pay for it with cash
+I want to see my beer on the table
+</code></pre>
+
+<p>Hey, guys, no offense... but that sounds retarded. Besides, that's just
+GUI testing! Some people may want to pay for the beer with a credit card, or open
+a check and pay everything at the end. Others may want to order a beer from
+the table without going to the bar. That kind of story doesn't test
+your business requiremenets, they don't apply to your domain logic! Your
+<code>Client</code> domains should be:</p>
+
+<pre><code>- Drink a beer
+- Be able to pay with cash or by card
+- Be able to open check and pay at the end
+</code></pre>
+
+<p>You may notice that I don't mention the <code>bar</code> at all, because that's only
+our <strong>delivery method</strong>, that's only a framework which may change in the
+future. Going to the <code>bar</code> is not <code>client</code> domain here. We may change <code>bar</code>
+into <code>delivery service</code> or <code>cute blonde waitress</code> and his domain
+doesn't chage. He will be able to drink beer and pay for it however
+he wants. <strong>Acceptance tests are supposed to test domain logic, not
+the delivery method</strong>. The delivery method is only a tool, a plugin which
+may be replaced at any time, without affecting your business model.
+Delivery methods should be tested by an <strong>integration tool</strong> and be part
+of the <strong>continuous integration process</strong> only!</p>
+
+<p>Uncle Bob said something great, something I did repeat many times myself
+but that some laud Rubyists around had different oppinions on:</p>
+
+<blockquote>
+The suite of tests is not there to satisfy the QA groups, it
+is not there to prove to other people that our code works. The suite 
+of tests is there so that we can refactor. So that when we bring the 
+code up to our screen then we're not afraid of it.
+</blockquote>
+
+
+<p>Think about it guys...</p>
+
+<h3 id="More+and+more+hammers">More and more hammers</h3>
+
+<p>The second thing I recently realized was how pathological the application
+design process is. Most of the projects we star from scratch start in a
+pointless discussion of which framework is better, what database
+should we use, what templating system should we apply, etc. <strong>We are
+discussing about unimportant crap</strong>!</p>
+
+<blockquote>
+- I bet we are gonna have a lot of writes, let's use Cassandra! <br>
+- Bullshit, there will be lot of reads too, Redis is best for that! <br>
+- Fuck you! Let's do something simple first and then optimize,
+  we should start with MySQL! <br>
+- I don't want to live on this planet anymore... <br>
+</blockquote>
+
+
+<p>Maybe I am exaggerating, but there's a lot of bootstrap conversations
+that look like this. But you know what? <strong>nothing really matters</strong>...
+Those who have seen Uncle Bob's talk at Ruby Midwest should already
+know that databases and frameworks are <strong>only tools</strong>, all this stuff,
+all the hammers are <strong>only plugins</strong> and should be treated so.</p>
+
+<h3 id="Lean+hacking?">Lean hacking?</h3>
+
+<p>Thus, databases and frameworks are only delivery methods, we
+don't know at the beginning of a project which one to use anyway. To be lean you
+have to deliver a minimum viable domain model to your users and learn
+from how they react. <strong>The way how you deliver your domain logic
+is not important at all</strong>.</p>
+
+<p>The book "The Lean Startup"  has become extremally popular recently. It has
+been especially adopted by all the Rails developers and dev shops.</p>
+
+<blockquote>
+Yeah, we're fantastic because we can build a Rails app in 2 weeks
+and validate your idea!
+</blockquote>
+
+
+<p>But again, Rails is only a tool, Rails doesn't determine the process
+of the lean product building. No tool does it! The <strong>Lean approach
+is this one which allows you to validate your domain model quickly by
+measuring reactions of the users of your product</strong>. A minimum viable
+product. If you make the validation of your domain logic (your idea) depend
+on the tool, on the framework or on the database then you're not lean,
+you are lost in dependencies' and tools' hell every time when you
+want to change something. You are not lean, just an Agile Rails Development
+shop or any other framework hyper! <strong>Lean is about eliminating any kind
+of waste</strong>. Oh, what's that? Aren't all the dependencies, plugins
+and tools which affect your domain model a waste?</p>
+
+<h3 id="Clients+from+hell...">Clients from hell...</h3>
+
+<p>Yeah, but we have to do the clients work, we have to deliver things,
+we have to match their expectations, right? You know what... now
+with humongous confidence I can say NO! Clients have ideas, and want
+to realize them to check if they're ok. <strong>But clients want the designing of
+the app to be the validation of their idea</strong> as well. Most
+developers used to say:</p>
+
+<blockquote>
+Oh, that client wants to do some shitty reports there. We know that's
+shit but they want to have it, let's do it then...
+</blockquote>
+
+
+<p>But that's wrong! <strong>Lean consultants should help the client to find
+the best way to validate his product and eliminate waste</strong>. If you
+think that something your client wants is a piece of crap and nobody is
+going to use it <strong>say it</strong>. Insist to measure user needs. Doing
+all the features required by the client super fast doesn't equal
+being lean. <strong>Being lean means that you are a logical filter for all
+the client's bad ideas</strong> - this is the very first validation of his
+product.</p>
+
+<p>The second problem with the clients is that they used to come with something like this:</p>
+
+<blockquote>
+We have an idea for a <strong>Rails application</strong>.
+</blockquote>
+
+
+<p>No motherfucker! You don't want to build a Rails app, what you want to
+build is <strong>an application</strong>. It may become a Rails app, it may become a
+Sinatra app, it may be even a console app, it doesn't matter. As I said
+before that it is only a delivery method, and from the lean perspective
+it's nothing else than <strong>waste</strong>. Mocks are friends of lean approach,
+<strong>mock everything you can, that's the fastest way to see if your potential
+users are going to like it or not</strong>.</p>
+
+<h3 id="(C)lean+code...">(C)lean code...</h3>
+
+<p>You know what, let's drink some beer now. But let's do it in a
+different way. We are going to do it with Ruby today, sorry to all the Gophers
+reading this article. I'll make some special episode about DDD in Go next
+time. We're going to start writing the story and tests - that's how
+TDD, BDD and other *DD variations works. <strong>You have to write tests first</strong>,
+otherwise you are just waisting time (eliminate waste, remember?).</p>
+
+<pre><code class="language-gherkin"><span class="k">Feature:</span><span class="nf"> Drinking beer</span>
+
+<span class="nf">  </span><span class="k">Scenario:</span><span class="nf"> Drink a beer</span>
+<span class="k">    When </span><span class="nf">I pick a beer</span>
+<span class="nf">    </span><span class="k">Then </span><span class="nf">I want to drink the beer I choose</span></code></pre>
+
+<p>Let's say we want to have a beer drinking service:</p>
+
+<pre><code class="language-ruby"><span class="no">When</span><span class="sr"> /I pick a beer/</span> <span class="k">do</span>
+  <span class="vi">@drinking</span> <span class="o">=</span> <span class="no">BeerDrinkingService</span><span class="o">.</span><span class="n">new</span>
+<span class="k">end</span>
+
+<span class="no">Then</span><span class="sr"> /I want to drink the beer I choose/</span> <span class="k">do</span>
+  <span class="vi">@drinking</span><span class="o">.</span><span class="n">call</span><span class="o">.</span><span class="n">should</span> <span class="o">==</span> <span class="s2">"Pssst! Gulp, gulp, gulp... aaaah!"</span>
+<span class="k">end</span></code></pre>
+
+<p>Now we know exactly what we want to do, we need a beer:</p>
+
+<pre><code class="language-ruby"><span class="k">class</span> <span class="nc">Beer</span>
+  <span class="k">def</span> <span class="nf">drink</span>
+    <span class="s2">"Pssst! Gulp, gulp, gulp... aaaah!"</span>
+  <span class="k">end</span>
+<span class="k">end</span></code></pre>
+
+<p>... and some client who wants to drink it:</p>
+
+<pre><code class="language-ruby"><span class="k">class</span> <span class="nc">Client</span>
+  <span class="k">def</span> <span class="nf">drink_a_beer</span>
+    <span class="no">Beer</span><span class="o">.</span><span class="n">new</span><span class="o">.</span><span class="n">drink</span>
+  <span class="k">end</span>
+<span class="k">end</span></code></pre>
+
+<p>Finally, we have to provide some way for the client o drink the beer
+easily, we need some <strong>interaction</strong>:</p>
+
+<pre><code class="language-ruby"><span class="k">class</span> <span class="nc">BeerDrinkingService</span>
+  <span class="k">def</span> <span class="nf">initialize</span>
+    <span class="vi">@client</span> <span class="o">=</span> <span class="no">Client</span><span class="o">.</span><span class="n">new</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nf">call</span>
+    <span class="vi">@client</span><span class="o">.</span><span class="n">drink_a_beer</span>
+  <span class="k">end</span>
+<span class="k">end</span></code></pre>
+
+<p>And you know what, that's already our minimum viable product! We have
+a client who can drink a beer, lovely! After we show it to potential clients
+they may not want to drink just some random beer. Maybe they want to select
+their favorite Scenario first:</p>
+
+<pre><code class="language-gherkin"><span class="k">Feature:</span><span class="nf"> Drining beer</span>
+
+<span class="nf">  </span><span class="k">Scenario:</span><span class="nf"> Drink favorite beer</span>
+<span class="k">    When </span><span class="nf">I pick my favorite "</span><span class="s">Belfast</span><span class="nf">" beer</span>
+<span class="nf">    </span><span class="k">Then </span><span class="nf">I want to drink the beer I choose</span></code></pre>
+
+<p>The tests may looks like this:</p>
+
+<pre><code class="language-ruby"><span class="no">When</span><span class="sr"> /I pick my favorite "(.*)" beer/</span> <span class="k">do</span> <span class="o">|</span><span class="n">beer_brand</span><span class="o">|</span>
+  <span class="vi">@drinking</span> <span class="o">=</span> <span class="no">BeerDrinkingService</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">beer_brand</span><span class="p">)</span>
+<span class="k">end</span>
+
+<span class="no">Then</span><span class="sr"> /I want to drink the beer I choose/</span> <span class="k">do</span>
+  <span class="vi">@drinking</span><span class="o">.</span><span class="n">call</span><span class="o">.</span><span class="n">should</span> <span class="o">==</span> <span class="s2">"Pssst! Gulp, gulp, gulp... aaaah!"</span>
+<span class="k">end</span></code></pre>
+
+<p>And the code...</p>
+
+<pre><code class="language-ruby"><span class="k">class</span> <span class="nc">Client</span>
+  <span class="k">def</span> <span class="nf">drink_a_beer</span><span class="p">(</span><span class="n">brand</span><span class="p">)</span>
+    <span class="no">Beer</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">brand</span><span class="p">)</span><span class="o">.</span><span class="n">drink</span>
+  <span class="k">end</span>
+<span class="k">end</span>
+
+<span class="k">class</span> <span class="nc">Beer</span> <span class="o">&lt;</span> <span class="no">Struct</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="ss">:brand</span><span class="p">)</span>
+  <span class="k">def</span> <span class="nf">drink</span>
+    <span class="nb">puts</span> <span class="s2">"Pssssst! Gulp, gulp, gulp... aaaah!"</span>
+  <span class="k">end</span>
+<span class="k">end</span>
+
+<span class="k">class</span> <span class="nc">BeerDrinkingService</span>
+  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="n">beer_brand</span><span class="p">)</span>
+    <span class="vi">@client</span> <span class="o">=</span> <span class="no">Client</span><span class="o">.</span><span class="n">new</span>
+    <span class="vi">@beer_brand</span> <span class="o">=</span> <span class="n">beer_brand</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nf">call</span>
+    <span class="vi">@client</span><span class="o">.</span><span class="n">drink_a_beer</span><span class="p">(</span><span class="n">beer_brand</span><span class="p">)</span>
+  <span class="k">end</span>
+<span class="k">end</span></code></pre>
+
+<p>Going further, now we may want to know how drunk the guy is. Maybe we
+don't want to sell him a beer when he looks like a sack of potatoes.
+Scenarios, scenarios, scenarios:</p>
+
+<pre><code class="language-gherkin"><span class="k">Feature:</span><span class="nf"> Drining beer</span>
+
+<span class="nf">  </span><span class="k">Scenario:</span><span class="nf"> Drink a favorite beer</span>
+<span class="k">    When </span><span class="nf">I pick my favorite "</span><span class="s">Belfast</span><span class="nf">" beer</span>
+<span class="nf">    </span><span class="k">Then </span><span class="nf">I want to drink the beer I choose</span>
+
+<span class="nf">  </span><span class="k">Scenario:</span><span class="nf"> Getting wasted</span>
+<span class="k">    When </span><span class="nf">I drink my favorite "</span><span class="s">Belfast</span><span class="nf">" beer until I look like a sack of potaoes</span>
+<span class="nf">    </span><span class="k">Then </span><span class="nf">I should not get another beer</span></code></pre>
+
+<p>Tests, tests, tests!</p>
+
+<pre><code class="language-ruby"><span class="no">Then</span><span class="sr"> /I want drink favorite "(.*)" beer until I get look like sack of potaoes/</span> <span class="k">do</span> <span class="o">|</span><span class="n">beer_brand</span><span class="o">|</span>
+  <span class="vi">@beer_brand</span> <span class="o">=</span> <span class="n">beer_brand</span>
+  <span class="mi">10</span><span class="o">.</span><span class="n">times</span> <span class="k">do</span>
+    <span class="n">step</span><span class="p">(</span><span class="sx">%(I pick my favorite "</span><span class="si">#{</span><span class="vi">@beer_brand</span><span class="si">}</span><span class="sx">" beer)</span><span class="p">)</span>
+    <span class="n">step</span><span class="p">(</span><span class="sx">%(I want to drink the beer I choose)</span><span class="p">)</span>
+  <span class="k">end</span>
+<span class="k">end</span>
+
+<span class="no">Then</span><span class="sr"> /I should not get another beer/</span> <span class="k">do</span>
+  <span class="n">step</span><span class="p">(</span><span class="sx">%(I pick my favorite "</span><span class="si">#{</span><span class="vi">@beer_brand</span><span class="si">}</span><span class="sx">" beer)</span><span class="p">)</span>
+  <span class="vi">@drinking</span><span class="o">.</span><span class="n">call</span><span class="o">.</span><span class="n">should</span> <span class="o">==</span> <span class="kp">false</span>
+<span class="k">end</span></code></pre>
+
+<p>And the code is growing:</p>
+
+<pre><code class="language-ruby"><span class="k">class</span> <span class="nc">Client</span> <span class="o">&lt;</span> <span class="no">Struct</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="ss">:drunkness</span><span class="p">)</span>
+  <span class="k">def</span> <span class="nf">drink_a_beer</span><span class="p">(</span><span class="n">brand</span><span class="p">)</span>
+    <span class="nb">self</span><span class="o">.</span><span class="n">drunkenness</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="no">Beer</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">brand</span><span class="p">)</span><span class="o">.</span><span class="n">drink</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nf">drunkness</span>
+    <span class="vi">@drunkness</span> <span class="o">||=</span> <span class="mi">0</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nf">waisted?</span>
+    <span class="nb">self</span><span class="o">.</span><span class="n">drunkenness</span> <span class="o">&gt;</span> <span class="mi">6</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nf">sack_of_potatoes?</span>
+    <span class="nb">self</span><span class="o">.</span><span class="n">drunknness</span> <span class="o">&gt;</span> <span class="mi">9</span>
+  <span class="k">end</span>
+<span class="k">end</span>
+
+<span class="k">class</span> <span class="nc">BeerDrinkingService</span>
+  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="n">client_id</span><span class="p">,</span> <span class="n">beer_brand</span><span class="p">)</span>
+    <span class="vi">@client</span> <span class="o">=</span> <span class="no">ClientsRepository</span><span class="o">.</span><span class="n">find_by_id_or_create</span><span class="p">(</span><span class="n">client_id</span><span class="p">)</span>
+    <span class="vi">@beer_brand</span> <span class="o">=</span> <span class="n">beer_brand</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nf">valid?</span>
+    <span class="o">!</span><span class="vi">@client</span><span class="o">.</span><span class="n">sack_of_potatoes?</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nf">call</span>
+    <span class="k">return</span> <span class="kp">false</span> <span class="k">unless</span> <span class="n">valid?</span>
+    <span class="vi">@client</span><span class="o">.</span><span class="n">drink_a_beer</span><span class="p">(</span><span class="vi">@beer_brand</span><span class="p">)</span>
+  <span class="k">end</span>
+<span class="k">end</span></code></pre>
+
+<p>Two new things shown up around the code: the first is validation, thus this
+dumb example is enough to return false if someone can't drink the
+beer. Otherwise we can consider returning some errors hash. In fact,
+validations are very hard problem itself. There's a holy war about where
+do validations should belong to, should they belong to the model like in
+ActiveRecord? But this requires dealing with various contexts very often.
+To the service, or form? Well, this may cause unncecessery repetition,
+and we don't want to repeat ourselves. Or maybe validators should be totally separated
+objects, service-like callables for checking various requirements on
+the passed objects? I personally think that what belongs to model,
+should be there, what belongs to service/form should be there. No
+mixing contexts, there's nothing worse than dealing with extra states.
+I think validations itself is a good topic for a future blog post,
+stay tuned for it.</p>
+
+<p>The second new thing is <code>ClientsRepository</code>, what's that? This is our
+proxy to data storage. <strong>Some, undefined data storage</strong>. You shouldn't
+imagine storage as a database. Storage is just a detail. It may be a
+simple Ruby hash. Speaking shortly, <strong>It doesn't mather at all</strong>.
+Here's how our clients repository may look like:</p>
+
+<pre><code class="language-ruby"><span class="k">class</span> <span class="nc">ClientsMockRepository</span>
+  <span class="no">DB</span> <span class="o">=</span> <span class="p">{}</span>
+
+  <span class="k">def</span> <span class="nc">self</span><span class="o">.</span><span class="nf">auto_increment</span>
+    <span class="vi">@auto_increment</span> <span class="o">||=</span> <span class="mi">0</span>
+    <span class="vi">@auto_increment</span> <span class="o">+=</span> <span class="mi">1</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nc">self</span><span class="o">.</span><span class="nf">find_by_id</span><span class="p">(</span><span class="n">client_id</span><span class="p">)</span>
+    <span class="no">DB</span><span class="o">[</span><span class="n">client_id</span><span class="o">]</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nc">self</span><span class="o">.</span><span class="nf">create</span>
+    <span class="no">DB</span><span class="o">[</span><span class="n">auto_increment</span><span class="o">]</span> <span class="o">=</span> <span class="no">Client</span><span class="o">.</span><span class="n">new</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nc">self</span><span class="o">.</span><span class="nf">find_by_id_or_create</span><span class="p">(</span><span class="n">client_id</span><span class="p">)</span>
+    <span class="n">find_by_id</span><span class="p">(</span><span class="n">client_id</span><span class="p">)</span> <span class="ow">or</span> <span class="n">create</span>
+  <span class="k">end</span>
+<span class="k">end</span>
+
+<span class="k">class</span> <span class="nc">ClientsRepository</span> <span class="o">&lt;</span> <span class="no">ClientsMockRepository</span>
+<span class="k">end</span></code></pre>
+
+<p>Now I can imagine a bunch of people saying, <em>Ohh, but how can I retrieve a list
+of all the clients</em>? Let me answer you with a question: Does your domain
+model require that feature?</p>
+
+<p>Second thing, you see that <code>ClientsRepository</code> inherits from a mock repository
+implementation. That's how it works, the repository is just a plugin, when
+you decide that you need to have your data persisted, you can just switch
+it to MySQL, Redis or whatever other driver you like. You can use global
+variable as well, use whatever is cleaner for you:</p>
+
+<pre><code class="language-ruby"><span class="vg">$clients_repository</span> <span class="o">=</span> <span class="no">ClientsMockRepository</span></code></pre>
+
+<p>We can go further and further, checking if the beer is available, charging
+the client for his drink, etc. etc. You can play with it at your home -
+yeah, treat it as a homework - you will see by yourself how easy is
+to implement a new features, changing existing ones and move project forward
+when you simply don't care about the details - storage, delivery method,
+views, etc.</p>
+
+<p>Oh, let me tell ya, <strong>the tests are blazingly fast</strong> no matter if you're
+using RSpec, Cucumber or God knows what other inventention. But, what's way
+more important for your clients, it to test what they actually do want to
+test. It doesn't test GUI or other shit which <strong>doesn't matter</strong> at the
+moment.</p>
+
+<p>As I said, after a while, when you may need a database, you can simply
+write a driver for it, a plugin, because <strong>a database is nothing more
+than a plugin</strong>... The same happens with visual representations, we can
+wrap our interaction around with some boundaries, write some presenter
+for it, write bunch of Rails spaghetti. We can expose it as a webservice
+and present using only JavaScript. There's no limits, can you see it now?
+<strong>You should always keep as much doors open as possible. Good architectural
+decisions allows you to keep doors open</strong>, use it wisely.</p>
+
+<h3 id="Optimize...+pivot?">Optimize... pivot?</h3>
+
+<p>Well, that's all for today. Some of you guys may consider this article
+as a pivot against your mindset, for some it may be just optimization,
+for many others it may be total bullshit. I will be happy to meet
+all of you and listen to your constructive feedback. Maybe your
+feedback will cause a pivot in my mindset? For sure it will optimize
+it!</p>
+
+<p>At the end, I would like to also thank Cubox for how they helped me to
+change my mindset during last year. Thanks to <a href="http://twitter.com/apotonick">apotonick</a>
+again! Big thanks to <a href="https://twitter.com/saturnflyer">Jim Gay</a> for his
+great talk at wroc_love.rb about DCI - even if I don't agree with all the
+presented ideas it helped me a lot to clarify mine :P. Also, thanks
+to <a href="https://twitter.com/tlossen">Tim Lossen</a> for raising the glove
+in the battle between monolythic apps versus web-services I go for,
+which caused me to dig deeper and deeper about this topic. I can't wait to see
+your talk at EuRuKo! And of course thanks to <a href="http://anarchogeek.com">rabble</a>
+for infecting me with Lean Startup stuff and making me understand it
+in practice.</p>
+
+<p>Like always thanks to <a href="http://twitter.com/poteland">pote</a> for reviewing
+my ugly english.</p>
+          </article>
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+              var disqus_shortname = 'areyoufuckingcodingme';
+              (function() {
+              var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+              dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+              (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+              })();
+          </script>
+          <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+          <a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a>
+        
+      </div>
+      <footer role="contentinfo">
+        Copyleft 2012 by <a href="http://www.nu7hat.ch/">nu7</a>, Some rights reserved. <br />
+        <small>
+          Follow me on <a href="http://twitter.com/nu7hatch">twitter</a> or see my projects
+          on <a href="http://github.com/nu7hatch">github</a>.<br />
+        </small>
+      </footer>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/js/libs/jquery-1.7.1.min.js"><\/script>')</script>
+    <script src='/js/plugins.js'></script>
+  </body>
+</html>

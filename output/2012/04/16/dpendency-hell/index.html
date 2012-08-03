@@ -1,0 +1,391 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Are You Fucking Coding Me!? - Dependency Hell</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css" media="screen">
+    <meta name="description" content="Distributed computing baby! Golang, Ruby, Linux and more!">
+    <meta name="author" content="Krzysztof Kowalik aka. nu7hatch">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="gkFdodtzp59LR90Na2j-sBnfUDoZ7oBQh0g6pE562vc" />
+    <script src="js/libs/modernizr-2.0.6.min.js"></script>
+    <script>
+        var _gaq=[['_setAccount','UA-28812082-1'],['_trackPageview']];
+        (function() {
+            var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+  </head>
+  <body>
+    <div id="container">
+      <header role="banner">
+        <h1>
+          <a href="/" id="logo">Are You Fucking Coding Me!?</a>
+        </h1>                                                
+        <div class="tagline">
+          <div class="in"><a href="http://www.nu7hat.ch/">by nu7</a></div>
+        </div>
+      </header>
+      <div id="main" role="main">
+        
+          <article class="fullpost" id="2012_4_16_dependency_hell">
+            <header>
+              <h2>Dependency Hell</h2>
+              <div class="info">
+                posted by <span class="fn">nu7</span> /
+                <time class="created_at" datetime="2012-04-16T00:00:00+02:00">
+                  April 16, 2012
+                </time><time >
+              </div>
+            </header>
+            <p>The recent wave of hate about Go's dependencies management and subsequent wave of ideas on
+how to "fix" it, i.a. <a href="https://github.com/kr/goven">goven by Keith Rarick</a> and
+<a href="http://groups.google.com/group/golang-nuts/browse_thread/thread/d1abee8965114909/b48d73c43943b9bc">this thread</a>
+on the go-nuts mailing list pushed me to some thoughts. In this post we
+will take a closer look at the <em>problem</em> so many people found in Go
+and possible solutions for it.</p>
+
+<h3 id="The+problem(?)">The problem(?)</h3>
+
+<p>First of all... what's the problem? That evil thing, shouted loudly by
+everyone is that the current way of dependency management does <strong>not protect</strong>
+them against bugs and changes in external packages. Some external
+dependency may change and break our code in the future or break our
+production environment!</p>
+
+<div class="meme">
+  <img src="/img/meme-omg.jpg" alt="OMG">
+</div>
+
+
+<p>Hmm, is that actually the problem? IMHO that's not the real problem but
+just the effect of another, separate problem. Namely: misunderstanding of versioning
+and dependencies recognition. So, let's clarify some things, and
+let's do it from very very beginning...</p>
+
+<p>So, what's <strong>software versioning</strong>? Or more explicitly, why do we need
+software versioning? Speaking shortly, <strong>software versioning is the way
+to distinguish changes in the code</strong>. The main job of versioning is to
+tell developers what has changed between the different versions. It also
+serves users by telling them  whether their software is stable or not, or to
+make the bug reporting process easier and more accurate.</p>
+
+<p>Now, what's the <strong>dependency</strong>? Dependency my friends is <strong>someone elses's
+piece of crap without which your piece of crap doesn't work</strong>.</p>
+
+<h3 id="Versioning+vs.+dependencies+resolving">Versioning vs. dependencies resolving</h3>
+
+<p>Now, some homework for you guys... Find a reasonable relationship between
+software versioning and dependencies resolving.</p>
+
+<p>Speaking for myself, I found none. Because there are no relationships
+between them. Software versioning and dependencies resolving are totally
+different things. Now I can already hear you guys screaming:</p>
+
+<blockquote>
+  So how can I specify on which version of the software my code depends?
+</blockquote>
+
+
+<p>And here we are: <strong>You don't have to know that</strong>! Let me put it
+this way: your code depends on packages <em>X</em> and <em>Y</em>. Now, package
+<em>Y</em> also depends on package <em>X</em>. If you make both dependencies
+fixed on an explicit version (or range of versions) then you may cause
+<strong>dependency hell</strong> between those packages or get blocked in
+the future. For example you may not be able update <em>Y</em> without
+updating <em>X</em>.</p>
+
+<p>Once again, this is not the problem, only a side effect of using versions
+in deps resolving. Of course, instead of eliminating the source of the
+problem many people try to make the effect less painful - like the
+Bundler gem in ruby or some super smart package managers. <strong>But you don't
+need that</strong>. In case of dependency management you <strong>should depend
+on the major version exclsively</strong> - moreover, you should consider
+different major versions as <strong>different packages</strong> (eg. <em>foo-1.0</em>
+and <em>foo-2.0</em> should be treated as different package with no relation
+whatsoever between them, more explicitly <em>foo1</em> != <em>foo2</em>).</p>
+
+<p>There's also very important thing all the maintainers should know:
+<strong>There should be no API changes between minor version changes and patch releases, motherfuckers!</strong>.</p>
+
+<div class="meme">
+  <img src="/img/meme-bugs-1.jpg" alt="Bugs, bugs, buuugs!">
+</div>
+
+
+<p>Yeah, but even if you follow the rules and you don't change the API
+between minor versions other problems or bugs might still pop up,
+nobody's perfect. What then?</p>
+
+<p>The simplest solution is to just downgrade the package to the first
+working version and report the bug, including infromation like from which
+version you have being forced to downgrad and which one solved the problem.
+<strong>This is the moment when versioning is usefull</strong>. This is also how
+software improves and gets rid of bugs :P.</p>
+
+<p>Anyway, now we're finally comming back to the big <em>"problem"</em> that everybody seems to be whining about...</p>
+
+<h3 id="I+can't+deploy+shit!">I can't deploy shit!</h3>
+
+<p>Now, again, I can just hear a bunch of pepole screaming:</p>
+
+<blockquote>
+  Are you fucking insane? I want to do a one click deploy without dealing
+  with packages on the production server.
+</blockquote>
+
+
+<p>It's reasonable that you want to make deploys fast and safe. But why do you
+want to deal with those packages anyway? There's one thing I can't
+understand at all: why the hell do you treat dependencies as a separate part of
+the software!? If you work on production-ready applications, you should
+not care about dependency management. Without this external piece of
+crap your crap doesn't work... more explicitly: this external crap
+is part of your crap now. Instead of specifying a bunch of fixed dependencies
+in a text file or complaining about the dependecy management in Go
+just add this external stuff to your repository and <strong>keep it together</strong>.</p>
+
+<p>Having all the dependencies versioned in your project's repository
+relieves you from having to care about the installation of dependencies in the production
+environment - <strong>because you're deploying the whole env</strong>. You also have
+full flexibility to deal with the upgrading and downgrading of those
+dependencies. If you use <code>git</code> then you can use <strong>submodules</strong>. If the
+dependencies are versioned with <code>hg</code> then you can keep mercurial information
+there and have access to the repo. You can also apply <strong>monkey patches
+or bugfixes directly in your environment</strong>. Finally, you can keep
+<strong>different versions of the packages for different projects</strong>.</p>
+
+<h3 id="Go+approach">Go approach</h3>
+
+<p>I hope that after the following examples the approach that spawned so many
+controversies will finally be considered as a great feature, not a
+problem. For those who don't know how it works: Go's import path is
+3 in one - it shows from where to download the external package, where to install
+it and later load it from at compile time, and what import name you should
+use in your code:</p>
+
+<pre><code class="language-go"><span class="k">import</span> <span class="s">"github.com/nu7hatch/gouuid"</span></code></pre>
+
+<p>The convention is simple to implement and really powerful, but needs a
+pivot in your programmer's mindset. I also agree that it requires a few
+tweaks to make it work in a handy way.</p>
+
+<h3 id="Tweaking!">Tweaking!</h3>
+
+<p>To make it work as expected first we should describe exactly what we
+want to achieve. I want to tweak the Go tool in a way which will meet the
+following requirements:</p>
+
+<ol>
+<li>I don't want to change the code I wrote so far (no difference in import paths).</li>
+<li>I want to keep tracking dependencies (be able to update/downgrade versions).</li>
+<li>I want to be able to monkey patch or bugfix directly into the package.</li>
+<li>I want to deploy code safely with a single command (safely = with the same effect
+in production as in development).</li>
+<li>I want to set a project up on a different machine with one command
+(eg. to bootstrap another copy for some other developer).</li>
+<li>Deployment should not be dependent on any external resources or repositories.</li>
+</ol><p>The first point is obvious so we'll just skip it. The second one - I want to track
+dependencies, which means I don't want to vendor them like <code>goven</code>
+does. Point three affects the previous one as well - I want to keep track
+of the external package and at the same time I want to be able to fix
+it or change it. The remaining points are also obvious - we want to deploy or
+setup our project as fast as possible - preferably with one command.</p>
+
+<p>How do we implement something like this in real life? The first thing that came to
+my mind was the <code>GOPATH</code> behaviour. I didn't feel like it is really needed and I
+had right, it's not needed at all. Instead of specifying <code>GOPATH</code> or dealing with
+it for different environments we can just add something unique which will allow
+<code>go</code> tool to say <em>woot! we're under gopath, let's use local stuff now!</em>. It may be done
+in the same way version control systems work - eg. by adding an empty <code>.go</code>
+file to our environment:</p>
+
+<pre><code>myappenv/
+  .go
+  bin/
+  pkg/
+  src/
+</code></pre>
+
+<p>The implementation is very simple. I just patched the <code>src/pkg/go/build.go</code> file
+with this code:</p>
+
+<pre><code class="language-go"><span class="k">func</span> <span class="n">discoverLocalGOPATH</span><span class="p">()</span> <span class="p">(</span><span class="n">gopath</span> <span class="nb">string</span><span class="p">,</span> <span class="n">ok</span> <span class="n">bool</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">var</span> <span class="n">pwd</span><span class="p">,</span> <span class="n">dotgo</span> <span class="nb">string</span>
+        <span class="k">var</span> <span class="n">err</span> <span class="n">error</span>
+
+        <span class="k">if</span> <span class="n">pwd</span><span class="p">,</span> <span class="n">err</span> <span class="p">=</span> <span class="n">os</span><span class="p">.</span><span class="n">Getwd</span><span class="p">();</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
+                <span class="k">return</span>
+        <span class="p">}</span>
+        <span class="k">for</span> <span class="p">;</span> <span class="n">pwd</span> <span class="p">!=</span> <span class="s">"/"</span><span class="p">;</span> <span class="n">pwd</span> <span class="p">=</span> <span class="n">pathpkg</span><span class="p">.</span><span class="n">Dir</span><span class="p">(</span><span class="n">pwd</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">dotgo</span> <span class="p">=</span> <span class="n">pathpkg</span><span class="p">.</span><span class="n">Join</span><span class="p">(</span><span class="n">pwd</span><span class="p">,</span> <span class="s">".go"</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">_</span><span class="p">,</span> <span class="n">err</span> <span class="p">=</span> <span class="n">os</span><span class="p">.</span><span class="n">Stat</span><span class="p">(</span><span class="n">dotgo</span><span class="p">);</span> <span class="n">err</span> <span class="p">==</span> <span class="n">nil</span> <span class="p">{</span>
+                        <span class="n">gopath</span><span class="p">,</span> <span class="n">ok</span> <span class="p">=</span> <span class="n">pwd</span><span class="p">,</span> <span class="n">true</span>
+                        <span class="k">return</span>
+                <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="k">return</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">defaultContext</span><span class="p">()</span> <span class="n">Context</span> <span class="p">{</span>
+        <span class="k">var</span> <span class="n">c</span> <span class="n">Context</span>
+
+        <span class="n">c</span><span class="p">.</span><span class="n">GOARCH</span> <span class="p">=</span> <span class="n">envOr</span><span class="p">(</span><span class="s">"GOARCH"</span><span class="p">,</span> <span class="n">runtime</span><span class="p">.</span><span class="n">GOARCH</span><span class="p">)</span>
+        <span class="n">c</span><span class="p">.</span><span class="n">GOOS</span> <span class="p">=</span> <span class="n">envOr</span><span class="p">(</span><span class="s">"GOOS"</span><span class="p">,</span> <span class="n">runtime</span><span class="p">.</span><span class="n">GOOS</span><span class="p">)</span>
+        <span class="n">c</span><span class="p">.</span><span class="n">GOROOT</span> <span class="p">=</span> <span class="n">runtime</span><span class="p">.</span><span class="n">GOROOT</span><span class="p">()</span>
+        <span class="n">c</span><span class="p">.</span><span class="n">GOPATH</span> <span class="p">=</span> <span class="n">envOr</span><span class="p">(</span><span class="s">"GOPATH"</span><span class="p">,</span> <span class="s">""</span><span class="p">)</span>
+
+        <span class="c1">// We have to prepend a local GOPATH if we find an `.go` file</span>
+        <span class="c1">// in one of the parent locations of current directory.</span>
+        <span class="k">if</span> <span class="n">localGOPATH</span><span class="p">,</span> <span class="n">ok</span> <span class="p">:=</span> <span class="n">discoverLocalGOPATH</span><span class="p">();</span> <span class="n">ok</span> <span class="p">{</span>
+                <span class="n">c</span><span class="p">.</span><span class="n">GOPATH</span> <span class="p">=</span> <span class="n">localGOPATH</span> <span class="p">+</span> <span class="s">":"</span> <span class="p">+</span> <span class="n">c</span><span class="p">.</span><span class="n">GOPATH</span>
+        <span class="p">}</span>
+
+        <span class="c1">// *snip*</span></code></pre>
+
+<p>That's how we get rid of the annoying <code>GOPATH</code>, or actually make it more
+useful and intuitive - different environments with no configuration at
+all. The local env is recognized by its <code>.go</code> file and the path to this directory
+will be prepended to <code>GOPATH</code>.</p>
+
+<p>Now the hardest part - dependnecy tracking. Lets say our application
+is <code>myappenv/src/acme.com/foobar</code> and depends on a few other packages.
+Instead of versioning this application only and looking for the way
+to track dependencies, let's version <code>~/myappenv</code> directly. Lets do it
+with git as an example:</p>
+
+<pre><code>$ cd ~/myappenv
+$ git init
+</code></pre>
+
+<p>If we depend on mercurial based projects, then it's easy - just add them
+to the repo with all the <code>hg</code> files. If we have git based dependencies
+then it's more tricky, because git doesn't allow the tracking of nested repositories
+without using submodules. It forces us to patch one more thing out there.
+This time in the <code>src/cmd/go/vcs.go</code> file:</p>
+
+<pre><code class="language-go"><span class="c1">// first we have to add submoduleCmd to vcs configurations:</span>
+<span class="k">var</span> <span class="n">vcsGit</span> <span class="p">=</span> <span class="p">&amp;</span><span class="n">vcsCmd</span><span class="p">{</span>
+       <span class="c1">// *snip*</span>
+       <span class="n">submoduleCmd</span><span class="p">:</span> <span class="s">"submodule add {repo} {dir}"</span><span class="p">,</span>
+       <span class="c1">// *snip*</span>
+<span class="p">}</span>
+
+<span class="c1">// ... Now we have to extend create function:</span>
+
+<span class="k">func</span> <span class="p">(</span><span class="n">v</span> <span class="p">*</span><span class="n">vcsCmd</span><span class="p">)</span> <span class="n">create</span><span class="p">(</span><span class="n">dir</span><span class="p">,</span> <span class="n">repo</span> <span class="nb">string</span><span class="p">)</span> <span class="n">error</span> <span class="p">{</span>
+        <span class="n">rootV</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">ok</span> <span class="p">:=</span> <span class="n">vcsForLocalRoot</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ok</span> <span class="p">{</span>
+                <span class="n">dir</span> <span class="p">=</span> <span class="n">strings</span><span class="p">.</span><span class="n">TrimLeft</span><span class="p">(</span><span class="n">strings</span><span class="p">.</span><span class="n">TrimLeft</span><span class="p">(</span><span class="n">dir</span><span class="p">,</span> <span class="n">root</span><span class="p">),</span> <span class="s">"/"</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">rootV</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">rootV</span><span class="p">.</span><span class="n">submoduleCmd</span><span class="p">,</span> <span class="s">"dir"</span><span class="p">,</span> <span class="n">dir</span><span class="p">,</span> <span class="s">"repo"</span><span class="p">,</span> <span class="n">repo</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">v</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="s">"."</span><span class="p">,</span> <span class="n">v</span><span class="p">.</span><span class="n">createCmd</span><span class="p">,</span> <span class="s">"dir"</span><span class="p">,</span> <span class="n">dir</span><span class="p">,</span> <span class="s">"repo"</span><span class="p">,</span> <span class="n">repo</span><span class="p">)</span>
+<span class="p">}</span></code></pre>
+
+<p>To avoid overhead of code I can just tell you that <code>vcsForLocalRoot</code> func
+checks if we're in a local env, if so it checks if it's versioned with
+the same version control system as our dependency, and if so it adds that
+dependency as a submodule instead of cloning it directly. Everything else
+remains the same. <a href="http://code.google.com/r/chris-go/source/checkout">You can get the patched version and try it out</a>.</p>
+
+<p>How do we use it now? Very simple - first of all throw your <code>GOPATH</code> configuration
+away, you don't need it anymore. There's one more new feature added there,
+the <code>init</code> command:</p>
+
+<pre><code>$ go init ~/myappenv
+</code></pre>
+
+<p>You can also specify which version control system you want to use:</p>
+
+<pre><code>$ go init -c hg ~/myappenv
+</code></pre>
+
+<p>This command will create the environment structure in a specified directory
+(the directory doesn't need to exist). I'm a lazy bastard, I didn't add a
+few things there yet, i.a you have to create the ignore file on your own,
+it should contain:</p>
+
+<pre><code>/bin/*
+/pkg/*
+</code></pre>
+
+<p>You also have to make initial commit manually, eg:</p>
+
+<pre><code>$ git add . &amp;&amp; git commit -m "hello go"
+</code></pre>
+
+<p>When you write some code and want to download dependencies, just run
+<code>go get</code> as usual. Remember that you have to commit changes after
+dependnecies are installed:</p>
+
+<pre><code>$ cd ~/myappenv
+$ go get ./...
+$ git add . &amp;&amp; git commit -m "added X and Y deps"
+</code></pre>
+
+<h3 id="Bootstrap,+deploy...">Bootstrap, deploy...</h3>
+
+<p>Using this approach you have the whole environment necessary to run
+your application in one place, safely versioned in your application's
+repository. You can deploy or boostrap this application quickly and
+in 2 steps.</p>
+
+<pre><code>$ git clone git@acme.com:myappenv.git
+$ cd ~/myappenv
+$ git submodule init &amp;&amp; git submodule update
+</code></pre>
+
+<p>We can definitely call it a one click deploy :P. What's more important,
+the deploy doesn't depend on any external sources, everything's bundled
+there with your project. We also have full control over each part of
+the system - each dependency can be separately updated, changed or
+patched. You can even replace the repository source with your monkey patched
+fork without affecting the import paths in your sources!</p>
+
+<div class="meme">
+  <img src="/img/meme-marvelous-1.jpg" alt="Marvelous!">
+</div>
+
+
+<h3 id="Summary">Summary</h3>
+
+<p>I'm curious about your oppinions and feedback about the stuff I wrote. From the short
+reaserch I've been doing everyone appears to love getting rid of <code>GOPATH</code> in favor
+of local environments. A few persons I asked around are still confused about
+dealing with submodules - to be honest I'm not 100% convinced to this
+approach yet, but so far it's the best I've found and matches the requirements
+I wrote down. I'm sure we can improve that part together. That's all folks,
+waiting for your comments.</p>
+
+<p>Like always thanks to <a href="http://twitter.com/poteland">pote</a> for reviewing
+my ugly english.</p>
+          </article>
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+              var disqus_shortname = 'areyoufuckingcodingme';
+              (function() {
+              var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+              dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+              (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+              })();
+          </script>
+          <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+          <a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a>
+        
+      </div>
+      <footer role="contentinfo">
+        Copyleft 2012 by <a href="http://www.nu7hat.ch/">nu7</a>, Some rights reserved. <br />
+        <small>
+          Follow me on <a href="http://twitter.com/nu7hatch">twitter</a> or see my projects
+          on <a href="http://github.com/nu7hatch">github</a>.<br />
+        </small>
+      </footer>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/js/libs/jquery-1.7.1.min.js"><\/script>')</script>
+    <script src='/js/plugins.js'></script>
+  </body>
+</html>
