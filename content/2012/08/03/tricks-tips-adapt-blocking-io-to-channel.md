@@ -49,7 +49,7 @@ current context and the goroutine.
                     for {
                             if n, err := conn.Read(b); err != nil {
                                     c <- nil
-                            } else if err == nil {
+                            } else {
                                     c <- b[:n]
                             }
                      }
