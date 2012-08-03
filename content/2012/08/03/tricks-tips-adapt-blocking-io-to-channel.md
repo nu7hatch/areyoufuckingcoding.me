@@ -42,14 +42,15 @@ current context and the goroutine.
     #!go
     func listen() <-chan []byte {
             c := make(chan []byte)
-            b := []byte{}
 
             go func() {            
+                    b := make([]byte, 1024)
+
                     for {
-                            if _, err := conn.Read(b); err != nil && err == io.EOF {
+                            if n, err := conn.Read(b); err != nil {
                                     c <- nil
                             } else if err == nil {
-                                    c <- b
+                                    c <- b[:n]
                             }
                      }
             }()

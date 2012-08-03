@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>Are You Fuckign Coding Me!? - GoTip #1 - Adapt blocking IO to a channel</title>
+    <title>Are You Fucking Coding Me!? - GoTip #1 - Adapt blocking IO to a channel</title>
     <link rel="stylesheet" type="text/css" href="/css/style.css" media="screen">
     <meta name="description" content="Distributed computing baby! Golang, Ruby, Linux and more!">
     <meta name="author" content="Krzysztof Kowalik aka. nu7hatch">
@@ -75,14 +75,15 @@ current context and the goroutine.</p>
 
 <pre><code class="language-go"><span class="k">func</span> <span class="n">listen</span><span class="p">()</span> <span class="p">&lt;-</span><span class="k">chan</span> <span class="p">[]</span><span class="nb">byte</span> <span class="p">{</span>
         <span class="n">c</span> <span class="p">:=</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">)</span>
-        <span class="n">b</span> <span class="p">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">{}</span>
 
         <span class="k">go</span> <span class="k">func</span><span class="p">()</span> <span class="p">{</span>            
+                <span class="n">b</span> <span class="p">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="nb">byte</span><span class="p">,</span> <span class="mi">1024</span><span class="p">)</span>
+
                 <span class="k">for</span> <span class="p">{</span>
-                        <span class="k">if</span> <span class="n">_</span><span class="p">,</span> <span class="n">err</span> <span class="p">:=</span> <span class="n">conn</span><span class="p">.</span><span class="n">Read</span><span class="p">(</span><span class="n">b</span><span class="p">);</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">&amp;&amp;</span> <span class="n">err</span> <span class="p">==</span> <span class="n">io</span><span class="p">.</span><span class="n">EOF</span> <span class="p">{</span>
+                        <span class="k">if</span> <span class="n">n</span><span class="p">,</span> <span class="n">err</span> <span class="p">:=</span> <span class="n">conn</span><span class="p">.</span><span class="n">Read</span><span class="p">(</span><span class="n">b</span><span class="p">);</span> <span class="n">err</span> <span class="p">!=</span> <span class="n">nil</span> <span class="p">{</span>
                                 <span class="n">c</span> <span class="p">&lt;-</span> <span class="n">nil</span>
                         <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">err</span> <span class="p">==</span> <span class="n">nil</span> <span class="p">{</span>
-                                <span class="n">c</span> <span class="p">&lt;-</span> <span class="n">b</span>
+                                <span class="n">c</span> <span class="p">&lt;-</span> <span class="n">b</span><span class="p">[:</span><span class="n">n</span><span class="p">]</span>
                         <span class="p">}</span>
                  <span class="p">}</span>
         <span class="p">}()</span>
